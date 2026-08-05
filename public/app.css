@@ -242,3 +242,32 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 26px 0; }
 .order-editor-grid label span, .order-editor-grid label small { display: block; }
 .order-editor-grid label small { color: var(--muted); font-weight: 500; }
 @media (max-width: 800px) { .order-editor-grid { grid-template-columns: 1fr; } }
+
+
+.roster-rule-panel {
+  margin-bottom: 20px;
+}
+
+.roster-rule-panel p:last-child {
+  max-width: 860px;
+  margin-bottom: 0;
+}
+
+.scoring-settings-panel {
+  overflow: hidden;
+}
+
+.weight-table input {
+  width: 110px;
+  min-height: 38px;
+  font-variant-numeric: tabular-nums;
+}
+
+.admin-access-note {
+  margin-bottom: 24px;
+  border-color: rgba(255, 207, 51, 0.35);
+}
+
+.admin-access-note code {
+  color: var(--accent-2);
+}
