@@ -18,15 +18,66 @@ const leagueRoutes = require('./routes/leagues');
 const adminRoutes = require('./routes/admin');
 const { syncDiscoveredRecaps } = require('./services/dciImport');
 
+async function migrateWithRetry({ attempts = 30, delayMs = 2000 } = {}) {
+  let lastError;
+
+  for (let attempt = 1; attempt <= attempts; attempt += 1) {
+    try {
+      await migrate();
+      return;
+    } catch (error) {
+      lastError = error;
+      console.error(
+        `Database initialization attempt ${attempt}/${attempts} failed: ${error.message}`
+      );
+
+      if (attempt < attempts) {
+        await new Promise((resolve) => setTimeout(resolve, delayMs));
+      }
+    }
+  }
+
+  throw lastError;
+}
+
 async function main() {
-  await migrate();
-
   const app = express();
+  let databaseReady = false;
+  let startupError = null;
   app.set('trust proxy', 1);
-  app.set('view engine', 'ejs');
-  app.set('views', path.join(__dirname, '..', 'views'));
+app.set('view engine', 'ejs');
+app.set('views', path.join(__dirname, '..', 'views'));
 
-  app.use(helmet({
+// Railway calls this endpoint during deployment. Opening the HTTP listener
+// before migrations lets Railway receive a real readiness response while
+// PostgreSQL is still starting instead of a generic service-unavailable error.
+app.get('/health', (_req, res) => {
+  if (databaseReady) {
+    return res.status(200).json({
+      ok: true,
+      database: 'ready'
+    });
+  }
+
+  return res.status(503).json({
+    ok: false,
+    database: 'starting',
+    error: startupError ? startupError.message : undefined
+  });
+});
+
+// Do not serve application routes until migrations and seed data are ready.
+app.use((req, res, next) => {
+  if (databaseReady || req.path === '/health') {
+    return next();
+  }
+
+  return res.status(503).send(
+    'CorpsDraft is initializing its database.'
+  );
+});
+
+app.use(helmet({
     contentSecurityPolicy: {
       directives: {
         "script-src": ["'self'"],
@@ -81,15 +132,6 @@ async function main() {
     }
   });
 
-  app.get('/health', async (_req, res) => {
-    try {
-      await query('SELECT 1');
-      res.status(200).json({ ok: true });
-    } catch (_error) {
-      res.status(503).json({ ok: false });
-    }
-  });
-
   app.use(authRoutes);
   app.use(leagueRoutes);
   app.use(adminRoutes);
@@ -110,10 +152,35 @@ async function main() {
   });
 
   const server = app.listen(config.port, '0.0.0.0', () => {
-    console.log(`CorpsDraft listening on port ${config.port}`);
+  console.log(
+    `CorpsDraft HTTP server listening on 0.0.0.0:${config.port}`
+  );
+});
+
+try {
+  await migrateWithRetry();
+
+  databaseReady = true;
+  startupError = null;
+
+  console.log('Database migrations and seed data are ready.');
+} catch (error) {
+  startupError = error;
+
+  console.error(
+    'Startup failed after database retries:',
+    error
+  );
+
+  server.close(async () => {
+    await pool.end().catch(() => {});
+    process.exit(1);
   });
 
-  if (config.dciImportEnabled && config.dciPermissionConfirmed) {
+  return;
+}
+
+if (config.dciImportEnabled && config.dciPermissionConfirmed) {
     cron.schedule(config.dciSyncCron, async () => {
       try {
         const results = await syncDiscoveredRecaps();
