@@ -1,0 +1,29 @@
+{
+  "name": "corpsdraft",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Fantasy drum corps drafting and scoring platform for Railway",
+  "main": "src/server.js",
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test",
+    "check": "node --check src/server.js && node --check src/routes/auth.js && node --check src/routes/leagues.js && node --check src/routes/admin.js && node --check src/services/dciImport.js && node --check src/services/dciParsing.js"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "bcryptjs": "^2.4.3",
+    "cheerio": "^1.0.0",
+    "connect-pg-simple": "^10.0.0",
+    "dotenv": "^16.4.7",
+    "ejs": "^3.1.10",
+    "express": "^4.21.2",
+    "express-rate-limit": "^7.5.0",
+    "express-session": "^1.18.1",
+    "helmet": "^8.0.0",
+    "node-cron": "^3.0.3",
+    "pg": "^8.13.3"
+  }
+}

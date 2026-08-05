@@ -1,0 +1,18 @@
+CORPSDRAFT RAILWAY DEPLOYMENT CHECKLIST
+
+1. Upload this project to a GitHub repository.
+2. Create a Railway project from that repository.
+3. Add a PostgreSQL service.
+4. Add these variables to the CorpsDraft app service:
+   DATABASE_URL=${{Postgres.DATABASE_URL}}
+   SESSION_SECRET=<long random value>
+   HEAD_ADMIN_EMAIL=<your email>
+   NODE_ENV=production
+5. Deploy and confirm /health returns {"ok":true}.
+6. Generate a public domain in Railway Networking.
+7. Register with the exact HEAD_ADMIN_EMAIL value.
+8. Open Head Admin, create an event, and enter scores.
+9. Create a league, invite users, set the draft order, and start drafting.
+
+DCI automatic import must remain disabled unless written reuse permission has
+been obtained. Manual head-admin score entry works without the connector.
