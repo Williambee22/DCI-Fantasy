@@ -1,0 +1,117 @@
+<%- include('../partials/header') %>
+<div class="page-heading split-heading">
+  <div>
+    <p class="eyebrow">League</p>
+    <h1><%= league.name %></h1>
+    <p class="muted"><%= league.season_year %> season · Invite code: <strong class="invite-code"><%= league.invite_code %></strong></p>
+  </div>
+  <div class="heading-actions">
+    <% if (league.draft_status === 'SETUP' && league.is_commissioner) { %>
+      <form method="post" action="/leagues/<%= league.id %>/draft/start">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <button class="button" name="mode" value="random" type="submit">Randomize & start</button>
+      </form>
+      <form method="post" action="/leagues/<%= league.id %>/draft/start">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <button class="button secondary" name="mode" value="saved" type="submit">Start saved order</button>
+      </form>
+    <% } else if (league.draft_status !== 'SETUP') { %>
+      <a class="button" href="/leagues/<%= league.id %>/draft">Open draft room</a>
+    <% } %>
+  </div>
+</div>
+
+<% if (league.draft_status === 'SETUP' && league.is_commissioner) { %>
+<section class="panel draft-order-editor">
+  <div class="section-title-row">
+    <div><p class="eyebrow">Commissioner</p><h2>Set draft order</h2><p class="muted">Assign every team a unique position, save it, then choose “Start saved order.”</p></div>
+  </div>
+  <form method="post" action="/leagues/<%= league.id %>/draft/order">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <div class="order-editor-grid">
+      <% members.forEach((member, index) => { %>
+        <label><span><strong><%= member.team_name %></strong><small>@<%= member.username %></small></span>
+          <select name="positions[<%= member.user_id %>]" required>
+            <% members.forEach((_, positionIndex) => { const position = positionIndex + 1; %>
+              <option value="<%= position %>" <%= Number(member.draft_position || index + 1) === position ? 'selected' : '' %>><%= position %></option>
+            <% }) %>
+          </select>
+        </label>
+      <% }) %>
+    </div>
+    <button class="button secondary small" type="submit">Save draft order</button>
+  </form>
+</section>
+<% } %>
+
+<div class="league-layout">
+  <section class="panel main-panel">
+    <div class="section-title-row">
+      <div><p class="eyebrow">Leaderboard</p><h2>Season standings</h2></div>
+      <span class="status <%= league.draft_status.toLowerCase() %>"><%= league.draft_status %></span>
+    </div>
+    <div class="table-wrap">
+      <table class="data-table standings-table">
+        <thead><tr><th>Place</th><th>Team</th><th>Manager</th><th>Assets</th><th>Points</th></tr></thead>
+        <tbody>
+          <% standings.forEach((team, index) => { %>
+            <tr>
+              <td class="place"><%= index + 1 %></td>
+              <td><strong><%= team.team_name %></strong></td>
+              <td><%= team.username %></td>
+              <td><%= team.drafted_assets %>/<%= league.roster_size %></td>
+              <td class="score"><%= formatScore(team.total_points) %></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <aside class="panel side-panel">
+    <p class="eyebrow">Your team</p>
+    <h2><%= league.team_name %></h2>
+    <form method="post" action="/leagues/<%= league.id %>/team-name" class="stack-form compact">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <label>Rename team<input name="team_name" value="<%= league.team_name %>" maxlength="80" required></label>
+      <button class="button secondary small" type="submit">Save name</button>
+    </form>
+    <% if (league.is_commissioner) { %>
+      <hr>
+      <p class="eyebrow">Commissioner controls</p>
+      <% if (league.draft_status === 'SETUP') { %>
+        <form method="post" action="/leagues/<%= league.id %>/settings" class="stack-form compact">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <label>Roster size per team<input type="number" name="roster_size" min="1" max="32" value="<%= league.roster_size %>" required></label>
+          <button class="button secondary small" type="submit">Update settings</button>
+        </form>
+      <% } else { %>
+        <form method="post" action="/leagues/<%= league.id %>/draft/reset" class="stack-form compact danger-zone">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <button class="button danger small" type="submit">Reset entire draft</button>
+        </form>
+      <% } %>
+    <% } %>
+  </aside>
+</div>
+
+<section class="section-block">
+  <div class="section-title-row"><div><p class="eyebrow">Rosters</p><h2>Drafted assets</h2></div></div>
+  <div class="roster-grid">
+    <% members.forEach((member) => { const picks = rosters[member.user_id] || []; %>
+      <article class="panel roster-card">
+        <div class="roster-head"><div><h3><%= member.team_name %></h3><p>@<%= member.username %></p></div><strong><%= picks.length %>/<%= league.roster_size %></strong></div>
+        <% if (!picks.length) { %><p class="muted">No picks yet.</p><% } %>
+        <ol class="asset-list">
+          <% picks.forEach((pick) => { %>
+            <li>
+              <div><span class="pick-num">#<%= pick.pick_number %></span><strong><%= pick.corps_name %></strong><small><%= pick.caption_name %> · <%= pick.component === 'FIRST' ? pick.first_label : pick.second_label %></small></div>
+              <span class="asset-points"><%= formatScore(pick.points) %></span>
+            </li>
+          <% }) %>
+        </ol>
+      </article>
+    <% }) %>
+  </div>
+</section>
+<%- include('../partials/footer') %>

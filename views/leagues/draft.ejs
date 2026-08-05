@@ -1,0 +1,68 @@
+<%- include('../partials/header') %>
+<div class="page-heading split-heading">
+  <div><p class="eyebrow">Live draft room</p><h1><%= league.name %></h1><p class="muted"><%= league.season_year %> season · Snake draft · <%= league.roster_size %> assets per team</p></div>
+  <div class="heading-actions">
+    <a class="button secondary" href="/leagues/<%= league.id %>">League page</a>
+    <% if (league.is_commissioner && ['ACTIVE', 'PAUSED'].includes(league.draft_status)) { %>
+      <form method="post" action="/leagues/<%= league.id %>/draft/toggle">
+        <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+        <button class="button" type="submit"><%= league.draft_status === 'ACTIVE' ? 'Pause draft' : 'Resume draft' %></button>
+      </form>
+    <% } %>
+  </div>
+</div>
+
+<div id="draft-app" class="draft-layout" data-league-id="<%= league.id %>" data-csrf="<%= csrfToken %>">
+  <section class="panel draft-board">
+    <div class="draft-status-bar">
+      <div><small>STATUS</small><strong id="draft-status"><%= league.draft_status %></strong></div>
+      <div><small>ROUND</small><strong id="draft-round">—</strong></div>
+      <div><small>PICK</small><strong id="draft-pick">—</strong></div>
+    </div>
+    <div class="on-clock-card">
+      <p class="eyebrow">On the clock</p>
+      <h2 id="on-clock">Loading draft state…</h2>
+      <p id="turn-message" class="muted"></p>
+    </div>
+
+    <form id="pick-form" class="pick-form">
+      <label>Corps
+        <select id="corps-select" name="corps_id" required>
+          <% corps.forEach((item) => { %><option value="<%= item.id %>"><%= item.name %></option><% }) %>
+        </select>
+      </label>
+      <label>Caption
+        <select id="caption-select" name="caption_code" required>
+          <% captions.forEach((caption) => { %>
+            <option value="<%= caption.code %>" data-first="<%= caption.first_label %>" data-second="<%= caption.second_label %>"><%= caption.name %></option>
+          <% }) %>
+        </select>
+      </label>
+      <label>Subcaption
+        <select id="component-select" name="component" required>
+          <option value="FIRST">Content</option>
+          <option value="SECOND">Achievement</option>
+        </select>
+      </label>
+      <button id="draft-button" class="button" type="submit">Make pick</button>
+      <p id="pick-error" class="form-error" role="alert"></p>
+    </form>
+  </section>
+
+  <aside class="panel order-panel">
+    <p class="eyebrow">Draft order</p>
+    <ol id="draft-order" class="draft-order"><li>Loading…</li></ol>
+  </aside>
+</div>
+
+<section class="section-block panel">
+  <div class="section-title-row"><div><p class="eyebrow">Pick history</p><h2>Draft board</h2></div><span id="pick-progress" class="muted"></span></div>
+  <div class="table-wrap">
+    <table class="data-table">
+      <thead><tr><th>Pick</th><th>Team</th><th>Corps</th><th>Caption</th><th>Subcaption</th></tr></thead>
+      <tbody id="pick-history"><tr><td colspan="5" class="muted">No picks yet.</td></tr></tbody>
+    </table>
+  </div>
+</section>
+<script src="/draft.js" defer></script>
+<%- include('../partials/footer') %>
