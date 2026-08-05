@@ -1,5 +1,6 @@
 const crypto = require('crypto');
 const { query } = require('./db');
+const config = require('./config');
 
 async function loadUser(req, res, next) {
   try {
@@ -10,7 +11,21 @@ async function loadUser(req, res, next) {
         [req.session.userId]
       );
       req.user = result.rows[0] || null;
-      if (!req.user) delete req.session.userId;
+
+      if (!req.user) {
+        delete req.session.userId;
+      } else if (
+        config.headAdminEmail
+        && req.user.email === config.headAdminEmail
+        && req.user.site_role !== 'ADMIN'
+      ) {
+        await query(
+          'UPDATE users SET site_role = $1 WHERE id = $2',
+          ['ADMIN', req.user.id]
+        );
+      
+        req.user.site_role = 'ADMIN';
+      }
     }
     res.locals.currentUser = req.user;
     next();
