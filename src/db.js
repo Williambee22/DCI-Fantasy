@@ -9,7 +9,10 @@ const pool = new Pool({
   connectionString: config.databaseUrl,
   ssl,
   max: Number(process.env.PG_POOL_MAX || 10),
-  idleTimeoutMillis: 30_000
+  idleTimeoutMillis: 30_000,
+  connectionTimeoutMillis: Number(
+    process.env.PG_CONNECT_TIMEOUT_MS || 10_000
+  )
 });
 
 pool.on('error', (error) => {
