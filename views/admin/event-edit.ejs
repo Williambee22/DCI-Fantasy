@@ -1,56 +1,279 @@
 <%- include('../partials/header') %>
+
 <div class="page-heading split-heading">
-  <div><p class="eyebrow">Global scoring</p><h1><%= event.name %></h1><p class="muted"><%= event.event_date %> · <%= event.location || 'Location not set' %></p></div>
-  <a class="button secondary" href="/admin">Back to admin</a>
+  <div>
+    <p class="eyebrow">Global scoring</p>
+
+    <h1><%= event.name %></h1>
+
+    <p class="muted">
+      <%= event.event_date %> ·
+      <%= event.location || 'Location not set' %>
+    </p>
+  </div>
+
+  <a
+    class="button secondary"
+    href="/admin"
+  >
+    Back to admin
+  </a>
 </div>
 
 <section class="panel event-meta-panel">
-  <form method="post" action="/admin/events/<%= event.id %>/meta" class="meta-form">
-    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-    <label>Event name<input name="name" value="<%= event.name %>" required></label>
-    <label>Date<input type="date" name="event_date" value="<%= event.event_date %>" required></label>
-    <label>Location<input name="location" value="<%= event.location || '' %>"></label>
-    <label class="checkbox-label"><input type="checkbox" name="finalized" <%= event.finalized ? 'checked' : '' %>> Count scores in fantasy standings</label>
-    <button class="button secondary small" type="submit">Save details</button>
+  <form
+    method="post"
+    action="/admin/events/<%= event.id %>/meta"
+    class="meta-form"
+  >
+    <input
+      type="hidden"
+      name="_csrf"
+      value="<%= csrfToken %>"
+    >
+
+    <label>
+      Event name
+
+      <input
+        name="name"
+        value="<%= event.name %>"
+        required
+      >
+    </label>
+
+    <label>
+      Date
+
+      <input
+        type="date"
+        name="event_date"
+        value="<%= event.event_date %>"
+        required
+      >
+    </label>
+
+    <label>
+      Location
+
+      <input
+        name="location"
+        value="<%= event.location || '' %>"
+      >
+    </label>
+
+    <label class="checkbox-label">
+      <input
+        type="checkbox"
+        name="finalized"
+        <%= event.finalized ? 'checked' : '' %>
+      >
+
+      Count scores in fantasy standings
+    </label>
+
+    <button
+      class="button secondary small"
+      type="submit"
+    >
+      Save details
+    </button>
+  </form>
+</section>
+
+<section class="section-block panel recap-paste-panel">
+  <div class="section-title-row">
+    <div>
+      <p class="eyebrow">Bulk score entry</p>
+
+      <h2>Paste complete recap</h2>
+
+      <p class="muted">
+        Paste the complete recap beginning with the first
+        corps name. Placement numbers, caption totals,
+        penalties, and final scores will be ignored.
+      </p>
+    </div>
+  </div>
+
+  <form
+    method="post"
+    action="/admin/events/<%= event.id %>/paste-scores"
+    class="stack-form"
+  >
+    <input
+      type="hidden"
+      name="_csrf"
+      value="<%= csrfToken %>"
+    >
+
+    <label>
+      Recap text
+
+      <textarea
+        name="recap_text"
+        rows="20"
+        required
+        spellcheck="false"
+        placeholder="Bluecoats
+9.800
+1
+9.750
+1
+19.550
+1
+..."
+      ></textarea>
+    </label>
+
+    <p class="muted">
+      Existing scores for corps included in the pasted recap
+      will be overwritten. Corps not included in the paste
+      will keep their current scores.
+    </p>
+
+    <button
+      class="button"
+      type="submit"
+    >
+      Import pasted recap
+    </button>
   </form>
 </section>
 
 <section class="section-block panel score-entry-panel">
-  <div class="section-title-row"><div><p class="eyebrow">Caption grid</p><h2>Enter subcaption scores</h2><p class="muted">Use three-decimal scores. Blank pairs are removed.</p></div></div>
-  <form method="post" action="/admin/events/<%= event.id %>/scores">
-    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+  <div class="section-title-row">
+    <div>
+      <p class="eyebrow">Caption grid</p>
+
+      <h2>Enter subcaption scores</h2>
+
+      <p class="muted">
+        Use three-decimal scores. Blank pairs are removed.
+      </p>
+    </div>
+  </div>
+
+  <form
+    method="post"
+    action="/admin/events/<%= event.id %>/scores"
+  >
+    <input
+      type="hidden"
+      name="_csrf"
+      value="<%= csrfToken %>"
+    >
+
     <div class="score-grid-wrap">
       <table class="score-grid">
         <thead>
           <tr>
-            <th class="sticky-col" rowspan="2">Corps</th>
-            <% captions.forEach((caption) => { %><th colspan="2"><%= caption.name %></th><% }) %>
+            <th
+              class="sticky-col"
+              rowspan="2"
+            >
+              Corps
+            </th>
+
+            <% captions.forEach((caption) => { %>
+              <th colspan="2">
+                <%= caption.name %>
+              </th>
+            <% }) %>
           </tr>
+
           <tr>
-            <% captions.forEach((caption) => { %><th><%= caption.first_label %></th><th><%= caption.second_label %></th><% }) %>
+            <% captions.forEach((caption) => { %>
+              <th>
+                <%= caption.first_label %>
+              </th>
+
+              <th>
+                <%= caption.second_label %>
+              </th>
+            <% }) %>
           </tr>
         </thead>
+
         <tbody>
           <% corps.forEach((item) => { %>
             <tr>
-              <th class="sticky-col"><%= item.name %></th>
-              <% captions.forEach((caption) => { const score = scoreMap[`${item.id}:${caption.code}`]; %>
-                <td><input aria-label="<%= item.name %> <%= caption.name %> <%= caption.first_label %>" type="number" min="0" max="10" step="0.001" name="scores[<%= item.id %>][<%= caption.code %>][first]" value="<%= score && score.first_score != null ? formatScore(score.first_score) : '' %>"></td>
-                <td><input aria-label="<%= item.name %> <%= caption.name %> <%= caption.second_label %>" type="number" min="0" max="10" step="0.001" name="scores[<%= item.id %>][<%= caption.code %>][second]" value="<%= score && score.second_score != null ? formatScore(score.second_score) : '' %>"></td>
+              <th class="sticky-col">
+                <%= item.name %>
+              </th>
+
+              <% captions.forEach((caption) => {
+                const score =
+                  scoreMap[`${item.id}:${caption.code}`];
+              %>
+                <td>
+                  <input
+                    aria-label="<%= item.name %> <%= caption.name %> <%= caption.first_label %>"
+                    type="number"
+                    min="0"
+                    max="10"
+                    step="0.001"
+                    name="scores[<%= item.id %>][<%= caption.code %>][first]"
+                    value="<%= score && score.first_score != null
+                      ? formatScore(score.first_score)
+                      : '' %>"
+                  >
+                </td>
+
+                <td>
+                  <input
+                    aria-label="<%= item.name %> <%= caption.name %> <%= caption.second_label %>"
+                    type="number"
+                    min="0"
+                    max="10"
+                    step="0.001"
+                    name="scores[<%= item.id %>][<%= caption.code %>][second]"
+                    value="<%= score && score.second_score != null
+                      ? formatScore(score.second_score)
+                      : '' %>"
+                  >
+                </td>
               <% }) %>
             </tr>
           <% }) %>
         </tbody>
       </table>
     </div>
-    <div class="sticky-save"><button class="button" type="submit">Save all scores</button><span>Updates every league immediately.</span></div>
+
+    <div class="sticky-save">
+      <button
+        class="button"
+        type="submit"
+      >
+        Save all scores
+      </button>
+
+      <span>
+        Updates every league immediately.
+      </span>
+    </div>
   </form>
 </section>
 
 <section class="danger-panel">
-  <form method="post" action="/admin/events/<%= event.id %>/delete">
-    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
-    <button class="button danger small" type="submit">Delete event and scores</button>
+  <form
+    method="post"
+    action="/admin/events/<%= event.id %>/delete"
+    onsubmit="return confirm('Delete this event and all of its scores?');"
+  >
+    <input
+      type="hidden"
+      name="_csrf"
+      value="<%= csrfToken %>"
+    >
+
+    <button
+      class="button danger small"
+      type="submit"
+    >
+      Delete event and scores
+    </button>
   </form>
 </section>
+
 <%- include('../partials/footer') %>
