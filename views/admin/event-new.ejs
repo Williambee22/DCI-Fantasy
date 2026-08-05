@@ -1,0 +1,15 @@
+<%- include('../partials/header') %>
+<div class="page-heading"><div><p class="eyebrow">Global scoring</p><h1>Add event</h1></div></div>
+<section class="auth-shell left-align">
+  <div class="auth-card wide-card">
+    <% if (typeof error !== 'undefined' && error) { %><div class="flash error"><%= error %></div><% } %>
+    <form method="post" action="/admin/events" class="stack-form">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <label>Event name<input name="name" value="<%= form.name || '' %>" maxlength="160" placeholder="DCI Southwestern Championship" required></label>
+      <label>Date<input type="date" name="event_date" value="<%= form.event_date || '' %>" required></label>
+      <label>Location<input name="location" value="<%= form.location || '' %>" maxlength="160" placeholder="San Antonio, TX"></label>
+      <button class="button" type="submit">Create scoring grid</button>
+    </form>
+  </div>
+</section>
+<%- include('../partials/footer') %>

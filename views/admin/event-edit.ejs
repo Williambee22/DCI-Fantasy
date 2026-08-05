@@ -1,0 +1,56 @@
+<%- include('../partials/header') %>
+<div class="page-heading split-heading">
+  <div><p class="eyebrow">Global scoring</p><h1><%= event.name %></h1><p class="muted"><%= event.event_date %> · <%= event.location || 'Location not set' %></p></div>
+  <a class="button secondary" href="/admin">Back to admin</a>
+</div>
+
+<section class="panel event-meta-panel">
+  <form method="post" action="/admin/events/<%= event.id %>/meta" class="meta-form">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <label>Event name<input name="name" value="<%= event.name %>" required></label>
+    <label>Date<input type="date" name="event_date" value="<%= event.event_date %>" required></label>
+    <label>Location<input name="location" value="<%= event.location || '' %>"></label>
+    <label class="checkbox-label"><input type="checkbox" name="finalized" <%= event.finalized ? 'checked' : '' %>> Count scores in fantasy standings</label>
+    <button class="button secondary small" type="submit">Save details</button>
+  </form>
+</section>
+
+<section class="section-block panel score-entry-panel">
+  <div class="section-title-row"><div><p class="eyebrow">Caption grid</p><h2>Enter subcaption scores</h2><p class="muted">Use three-decimal scores. Blank pairs are removed.</p></div></div>
+  <form method="post" action="/admin/events/<%= event.id %>/scores">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <div class="score-grid-wrap">
+      <table class="score-grid">
+        <thead>
+          <tr>
+            <th class="sticky-col" rowspan="2">Corps</th>
+            <% captions.forEach((caption) => { %><th colspan="2"><%= caption.name %></th><% }) %>
+          </tr>
+          <tr>
+            <% captions.forEach((caption) => { %><th><%= caption.first_label %></th><th><%= caption.second_label %></th><% }) %>
+          </tr>
+        </thead>
+        <tbody>
+          <% corps.forEach((item) => { %>
+            <tr>
+              <th class="sticky-col"><%= item.name %></th>
+              <% captions.forEach((caption) => { const score = scoreMap[`${item.id}:${caption.code}`]; %>
+                <td><input aria-label="<%= item.name %> <%= caption.name %> <%= caption.first_label %>" type="number" min="0" max="10" step="0.001" name="scores[<%= item.id %>][<%= caption.code %>][first]" value="<%= score && score.first_score != null ? formatScore(score.first_score) : '' %>"></td>
+                <td><input aria-label="<%= item.name %> <%= caption.name %> <%= caption.second_label %>" type="number" min="0" max="10" step="0.001" name="scores[<%= item.id %>][<%= caption.code %>][second]" value="<%= score && score.second_score != null ? formatScore(score.second_score) : '' %>"></td>
+              <% }) %>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+    <div class="sticky-save"><button class="button" type="submit">Save all scores</button><span>Updates every league immediately.</span></div>
+  </form>
+</section>
+
+<section class="danger-panel">
+  <form method="post" action="/admin/events/<%= event.id %>/delete">
+    <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+    <button class="button danger small" type="submit">Delete event and scores</button>
+  </form>
+</section>
+<%- include('../partials/footer') %>

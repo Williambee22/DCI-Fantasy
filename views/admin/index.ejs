@@ -1,0 +1,78 @@
+<%- include('../partials/header') %>
+<div class="page-heading split-heading">
+  <div><p class="eyebrow">Site-wide controls</p><h1>Head Admin</h1><p class="muted">Scores entered here update every fantasy league.</p></div>
+  <a class="button" href="/admin/events/new">Add score event</a>
+</div>
+
+<section class="admin-stats">
+  <div class="stat-card"><strong><%= counts.users %></strong><span>Users</span></div>
+  <div class="stat-card"><strong><%= counts.leagues %></strong><span>Leagues</span></div>
+  <div class="stat-card"><strong><%= counts.picks %></strong><span>Draft picks</span></div>
+  <div class="stat-card"><strong><%= counts.scores %></strong><span>Caption scores</span></div>
+</section>
+
+<div class="admin-grid">
+  <section class="panel main-panel">
+    <div class="section-title-row"><div><p class="eyebrow">Global scoring</p><h2>Events</h2></div></div>
+    <% if (!events.length) { %><div class="empty-state"><p>No events yet.</p></div><% } %>
+    <div class="table-wrap">
+      <table class="data-table">
+        <thead><tr><th>Date</th><th>Event</th><th>Location</th><th>Rows</th><th>Source</th><th></th></tr></thead>
+        <tbody>
+          <% events.forEach((event) => { %>
+            <tr>
+              <td><%= new Date(`${event.event_date}T12:00:00Z`).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric', timeZone: 'UTC' }) %></td>
+              <td><strong><%= event.name %></strong><% if (!event.finalized) { %><span class="status paused">DRAFT</span><% } %></td>
+              <td><%= event.location || '—' %></td><td><%= event.score_rows %></td><td><%= event.source_kind %></td>
+              <td><a href="/admin/events/<%= event.id %>/edit">Edit scores →</a></td>
+            </tr>
+          <% }) %>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <aside class="panel side-panel">
+    <p class="eyebrow">Corps pool</p><h2>Add corps</h2>
+    <form method="post" action="/admin/corps" class="stack-form compact">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <label>Corps name<input name="name" maxlength="120" required></label>
+      <button class="button secondary small" type="submit">Add corps</button>
+    </form>
+    <div class="corps-list">
+      <% corps.forEach((item) => { %>
+        <form method="post" action="/admin/corps/<%= item.id %>/toggle" class="corps-row">
+          <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+          <span><%= item.name %></span><button class="text-button" type="submit"><%= item.active ? 'Active' : 'Inactive' %></button>
+        </form>
+      <% }) %>
+    </div>
+  </aside>
+</div>
+
+<section class="section-block import-grid">
+  <article class="panel">
+    <p class="eyebrow">Authorized DCI connector</p>
+    <h2>Import recap URL</h2>
+    <p class="muted">Disabled unless both permission environment flags are enabled. Standard single-panel recaps are supported; manual entry remains the fallback.</p>
+    <form method="post" action="/admin/import-dci" class="stack-form compact">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <label>Official recap URL<input type="url" name="url" placeholder="https://www.dci.org/scores/recap/2026-event/" <%= dciImportEnabled ? '' : 'disabled' %> required></label>
+      <button class="button secondary" type="submit" <%= dciImportEnabled ? '' : 'disabled' %>>Import recap</button>
+    </form>
+    <form method="post" action="/admin/sync-dci" class="stack-form compact top-gap">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <button class="button" type="submit" <%= dciImportEnabled ? '' : 'disabled' %>>Discover & sync current season</button>
+    </form>
+  </article>
+  <article class="panel">
+    <p class="eyebrow">Connector log</p><h2>Recent sync runs</h2>
+    <div class="sync-list">
+      <% if (!syncRuns.length) { %><p class="muted">No sync attempts yet.</p><% } %>
+      <% syncRuns.forEach((run) => { %>
+        <div><span class="status <%= run.status === 'SUCCESS' ? 'complete' : 'paused' %>"><%= run.status %></span><p><%= run.message %></p><small><%= new Date(run.created_at).toLocaleString() %></small></div>
+      <% }) %>
+    </div>
+  </article>
+</section>
+<%- include('../partials/footer') %>
