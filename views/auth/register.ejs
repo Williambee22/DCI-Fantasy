@@ -1,0 +1,17 @@
+<%- include('../partials/header') %>
+<section class="auth-shell">
+  <div class="auth-card">
+    <p class="eyebrow">Join CorpsDraft</p>
+    <h1>Create your account</h1>
+    <% if (typeof error !== 'undefined' && error) { %><div class="flash error"><%= error %></div><% } %>
+    <form method="post" action="/register" class="stack-form">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <label>Email<input type="email" name="email" value="<%= form.email || '' %>" autocomplete="email" required></label>
+      <label>Username<input type="text" name="username" value="<%= form.username || '' %>" autocomplete="username" pattern="[A-Za-z0-9_]{3,40}" required></label>
+      <label>Password<input type="password" name="password" autocomplete="new-password" minlength="8" required></label>
+      <button class="button full" type="submit">Create account</button>
+    </form>
+    <p class="muted centered">Already registered? <a href="/login">Log in</a>.</p>
+  </div>
+</section>
+<%- include('../partials/footer') %>

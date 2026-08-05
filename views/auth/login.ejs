@@ -1,0 +1,16 @@
+<%- include('../partials/header') %>
+<section class="auth-shell">
+  <div class="auth-card">
+    <p class="eyebrow">Welcome back</p>
+    <h1>Log in</h1>
+    <% if (typeof error !== 'undefined' && error) { %><div class="flash error"><%= error %></div><% } %>
+    <form method="post" action="/login" class="stack-form">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <label>Email<input type="email" name="email" value="<%= form.email || '' %>" autocomplete="email" required></label>
+      <label>Password<input type="password" name="password" autocomplete="current-password" required></label>
+      <button class="button full" type="submit">Log in</button>
+    </form>
+    <p class="muted centered">Need an account? <a href="/register">Create one</a>.</p>
+  </div>
+</section>
+<%- include('../partials/footer') %>
