@@ -4,6 +4,9 @@ const { requireAdmin, flash } = require('../middleware');
 const { cleanText, slugify, asNumber, formatScore } = require('../utils');
 const config = require('../config');
 const { importRecapUrl, syncDiscoveredRecaps } = require('../services/dciImport');
+const {
+  parseRecapPaste
+} = require('../services/recapPaste');
 
 const router = express.Router();
 router.use(requireAdmin);
@@ -204,6 +207,117 @@ router.post('/admin/events/:eventId/scores', async (req, res, next) => {
     next(error);
   }
 });
+
+router.post(
+  '/admin/events/:eventId/paste-scores',
+  async (req, res, next) => {
+    try {
+      const [
+        eventResult,
+        corpsResult
+      ] = await Promise.all([
+        query(`
+          SELECT id, name
+          FROM events
+          WHERE id = $1
+        `, [req.params.eventId]),
+
+        query(`
+          SELECT id, name
+          FROM corps
+          ORDER BY name
+        `)
+      ]);
+
+      if (!eventResult.rowCount) {
+        return res.status(404).render(
+          'error',
+          {
+            title: 'Event not found',
+            message: 'That event does not exist.'
+          }
+        );
+      }
+
+      const parsedCorps = parseRecapPaste(
+        req.body.recap_text,
+        corpsResult.rows
+      );
+
+      let savedRows = 0;
+
+      await withTransaction(async (client) => {
+        for (const parsedCorpsEntry of parsedCorps) {
+          for (const score of parsedCorpsEntry.scores) {
+            await client.query(`
+              INSERT INTO scores (
+                event_id,
+                corps_id,
+                caption_code,
+                first_score,
+                second_score,
+                updated_at
+              )
+              VALUES (
+                $1,
+                $2,
+                $3,
+                $4,
+                $5,
+                NOW()
+              )
+
+              ON CONFLICT (
+                event_id,
+                corps_id,
+                caption_code
+              )
+              DO UPDATE SET
+                first_score =
+                  EXCLUDED.first_score,
+                second_score =
+                  EXCLUDED.second_score,
+                updated_at = NOW()
+            `, [
+              req.params.eventId,
+              parsedCorpsEntry.corpsId,
+              score.captionCode,
+              score.firstScore,
+              score.secondScore
+            ]);
+
+            savedRows += 1;
+          }
+        }
+      });
+
+      flash(
+        req,
+        'success',
+        `Imported ${parsedCorps.length} corps and saved ${savedRows} caption score rows. Fantasy standings have been updated.`
+      );
+
+      return res.redirect(
+        `/admin/events/${req.params.eventId}/edit`
+      );
+    } catch (error) {
+      if (error.status === 400) {
+        flash(
+          req,
+          'error',
+          error.message
+        );
+
+        return res.redirect(
+          `/admin/events/${req.params.eventId}/edit`
+        );
+      }
+
+      next(error);
+    }
+  }
+);
+
 
 router.post('/admin/events/:eventId/delete', async (req, res, next) => {
   try {
