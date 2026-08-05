@@ -1,0 +1,39 @@
+<%- include('partials/header') %>
+<section class="hero">
+  <div class="hero-copy">
+    <p class="eyebrow">Fantasy competition for drum corps fans</p>
+    <h1>Draft captions.<br>Track every tenth.</h1>
+    <p class="lede">Build a roster from individual corps subcaptions—such as Bluecoats Visual Proficiency Achievement or Carolina Crown Brass Content—and compete as official scores are entered.</p>
+    <div class="hero-actions">
+      <% if (currentUser) { %>
+        <a class="button" href="/dashboard">Open dashboard</a>
+      <% } else { %>
+        <a class="button" href="/register">Start a league</a>
+        <a class="button secondary" href="/login">Log in</a>
+      <% } %>
+    </div>
+  </div>
+  <div class="score-card hero-card">
+    <div class="score-card-head"><span>LIVE LEAGUE</span><span>ROUND 4</span></div>
+    <ol class="mini-standings">
+      <li><span><b>1</b> Brass Tax</span><strong>428.750</strong></li>
+      <li><span><b>2</b> Box Five</span><strong>425.300</strong></li>
+      <li><span><b>3</b> The Z-Pull</span><strong>421.850</strong></li>
+    </ol>
+    <div class="on-clock">
+      <small>ON THE CLOCK</small>
+      <strong>Carolina Crown · Brass · Content</strong>
+    </div>
+  </div>
+</section>
+<section class="stats-strip">
+  <div><strong><%= counts.users %></strong><span>players</span></div>
+  <div><strong><%= counts.leagues %></strong><span>leagues</span></div>
+  <div><strong><%= counts.picks %></strong><span>drafted assets</span></div>
+</section>
+<section class="feature-grid">
+  <article class="panel"><span class="step">01</span><h2>Create a league</h2><p>The creator becomes commissioner and receives an invite code for friends.</p></article>
+  <article class="panel"><span class="step">02</span><h2>Run a snake draft</h2><p>Each corps, caption, and subcaption combination can be owned only once per league.</p></article>
+  <article class="panel"><span class="step">03</span><h2>Score globally</h2><p>The head admin enters one event recap. Every league recalculates immediately.</p></article>
+</section>
+<%- include('partials/footer') %>

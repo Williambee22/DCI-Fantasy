@@ -1,0 +1,44 @@
+<%- include('partials/header') %>
+<div class="page-heading">
+  <div><p class="eyebrow">Welcome, <%= currentUser.username %></p><h1>Your leagues</h1></div>
+</div>
+<div class="dashboard-grid">
+  <section class="panel">
+    <h2>Create a league</h2>
+    <p class="muted">You become commissioner and control the draft.</p>
+    <form method="post" action="/leagues" class="stack-form compact">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <label>League name<input name="name" maxlength="100" placeholder="Saturday Night Lights" required></label>
+      <label>Your team name<input name="team_name" maxlength="80" placeholder="Brass Tax"></label>
+      <label>Season year<input type="number" name="season_year" min="2000" max="2100" value="<%= new Date().getFullYear() %>" required></label>
+      <button class="button" type="submit">Create league</button>
+    </form>
+  </section>
+  <section class="panel">
+    <h2>Join a league</h2>
+    <p class="muted">Enter the code sent by the commissioner.</p>
+    <form method="post" action="/leagues/join" class="stack-form compact">
+      <input type="hidden" name="_csrf" value="<%= csrfToken %>">
+      <label>Invite code<input name="invite_code" maxlength="16" class="code-input" placeholder="A1B2C3D4" required></label>
+      <label>Your team name<input name="team_name" maxlength="80" placeholder="Box Five"></label>
+      <button class="button secondary" type="submit">Join league</button>
+    </form>
+  </section>
+</div>
+<section class="section-block">
+  <% if (!leagues.length) { %>
+    <div class="empty-state"><h2>No leagues yet</h2><p>Create one or join with an invite code.</p></div>
+  <% } else { %>
+    <div class="league-cards">
+      <% leagues.forEach((league) => { %>
+        <a class="league-card" href="/leagues/<%= league.id %>">
+          <div class="league-card-top"><span class="status <%= league.draft_status.toLowerCase() %>"><%= league.draft_status %></span><span><%= league.member_count %> teams</span></div>
+          <h2><%= league.name %></h2>
+          <p><%= league.team_name %> · <%= league.season_year %> season</p>
+          <div class="league-card-foot"><span><%= league.is_commissioner ? 'Commissioner' : 'Member' %></span><span>Open →</span></div>
+        </a>
+      <% }) %>
+    </div>
+  <% } %>
+</section>
+<%- include('partials/footer') %>

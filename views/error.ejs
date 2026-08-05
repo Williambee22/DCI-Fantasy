@@ -1,0 +1,8 @@
+<%- include('partials/header') %>
+<section class="error-page">
+  <p class="eyebrow">CorpsDraft</p>
+  <h1><%= title %></h1>
+  <p><%= message %></p>
+  <a class="button" href="<%= currentUser ? '/dashboard' : '/' %>">Return</a>
+</section>
+<%- include('partials/footer') %>
