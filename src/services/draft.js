@@ -14,8 +14,19 @@ function draftRound(memberCount, pickNumber) {
   return Math.floor((pickNumber - 1) / memberCount) + 1;
 }
 
-function totalDraftPicks(memberCount, rosterSize) {
-  return memberCount * rosterSize;
+function picksPerTeam(captionCount) {
+  if (!Number.isInteger(captionCount) || captionCount < 1) return 0;
+  return captionCount * 2;
 }
 
-module.exports = { snakeUserId, draftRound, totalDraftPicks };
+function totalDraftPicks(memberCount, captionCount) {
+  if (!Number.isInteger(memberCount) || memberCount < 1) return 0;
+  return memberCount * picksPerTeam(captionCount);
+}
+
+module.exports = {
+  snakeUserId,
+  draftRound,
+  picksPerTeam,
+  totalDraftPicks
+};
