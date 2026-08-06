@@ -10,7 +10,7 @@
       <%= league.season_year %> season ·
       Snake draft ·
       <%= requiredPicksPerTeam %> picks per team ·
-      one Content and one Achievement selection from every caption
+      one first and one second subcaption from every caption
     </p>
   </div>
 
@@ -24,7 +24,9 @@
 
     <% if (
       league.is_commissioner
-      && ['ACTIVE', 'PAUSED'].includes(league.draft_status)
+      && ['ACTIVE', 'PAUSED'].includes(
+        league.draft_status
+      )
     ) { %>
       <form
         method="post"
@@ -59,6 +61,7 @@
     <div class="draft-status-bar">
       <div>
         <small>STATUS</small>
+
         <strong id="draft-status">
           <%= league.draft_status %>
         </strong>
@@ -66,12 +69,18 @@
 
       <div>
         <small>ROUND</small>
-        <strong id="draft-round">—</strong>
+
+        <strong id="draft-round">
+          —
+        </strong>
       </div>
 
       <div>
         <small>PICK</small>
-        <strong id="draft-pick">—</strong>
+
+        <strong id="draft-pick">
+          —
+        </strong>
       </div>
     </div>
 
@@ -86,6 +95,20 @@
         id="turn-message"
         class="muted"
       ></p>
+    </div>
+
+    <div class="draft-pick-heading">
+      <div>
+        <p class="eyebrow">Make your selection</p>
+
+        <h2>Draft a caption asset</h2>
+
+        <p class="muted">
+          Choose a corps, caption, and subcaption.
+          Caption slots you still need are listed beside
+          the draft board.
+        </p>
+      </div>
     </div>
 
     <form
@@ -163,15 +186,53 @@
     </form>
   </section>
 
-  <aside class="panel order-panel">
-    <p class="eyebrow">Draft order</p>
+  <aside class="draft-side-stack">
+    <section class="panel order-panel">
+      <p class="eyebrow">Draft order</p>
 
-    <ol
-      id="draft-order"
-      class="draft-order"
-    >
-      <li>Loading…</li>
-    </ol>
+      <h2>Managers</h2>
+
+      <ol
+        id="draft-order"
+        class="draft-order"
+      >
+        <li>Loading…</li>
+      </ol>
+    </section>
+
+    <section class="panel missing-draft-panel">
+      <div class="missing-draft-heading">
+        <div>
+          <p class="eyebrow">
+            Your remaining needs
+          </p>
+
+          <h2 id="missing-slot-count">
+            Loading…
+          </h2>
+        </div>
+
+        <strong
+          id="missing-slot-progress"
+          class="missing-progress"
+        >
+          —/<%= requiredPicksPerTeam %>
+        </strong>
+      </div>
+
+      <p class="muted">
+        Select a missing slot below to automatically
+        choose its caption and subcaption in the draft
+        form.
+      </p>
+
+      <div
+        id="missing-slots"
+        class="draft-missing-list"
+      >
+        Loading caption needs…
+      </div>
+    </section>
   </aside>
 </div>
 
@@ -179,6 +240,7 @@
   <div class="section-title-row">
     <div>
       <p class="eyebrow">Pick history</p>
+
       <h2>Draft board</h2>
     </div>
 
@@ -189,7 +251,7 @@
   </div>
 
   <div class="table-wrap">
-    <table class="data-table">
+    <table class="data-table draft-history-table">
       <thead>
         <tr>
           <th>Pick</th>
