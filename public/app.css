@@ -292,3 +292,323 @@ hr { border: 0; border-top: 1px solid var(--line); margin: 26px 0; }
 .recap-paste-panel form {
   max-width: none;
 }
+
+
+/* League draft summary */
+
+.draft-summary-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(340px, 0.8fr);
+  gap: 20px;
+  margin-bottom: 24px;
+}
+
+.roster-rule-panel,
+.missing-summary-panel {
+  margin: 0;
+}
+
+.missing-summary-heading,
+.missing-draft-heading {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.missing-progress {
+  font-size: 1.1rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.missing-chip-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 16px;
+}
+
+.missing-chip {
+  display: inline-flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 8px 11px;
+  border: 1px solid rgba(220, 38, 38, 0.28);
+  border-radius: 6px;
+  background: rgba(220, 38, 38, 0.07);
+}
+
+.missing-chip strong {
+  font-size: 0.76rem;
+}
+
+.missing-chip small {
+  color: var(--muted);
+  font-size: 0.7rem;
+}
+
+.roster-complete-message,
+.draft-needs-complete {
+  padding: 14px;
+  border: 1px solid rgba(22, 163, 74, 0.3);
+  border-radius: 6px;
+  background: rgba(22, 163, 74, 0.08);
+}
+
+
+/* Draft room sidebar */
+
+.draft-side-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+  min-width: 0;
+}
+
+.draft-missing-list {
+  display: grid;
+  gap: 7px;
+  margin-top: 14px;
+  max-height: 460px;
+  overflow-y: auto;
+}
+
+.draft-missing-item {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 9px 11px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  background: var(--surface);
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.draft-missing-item:hover {
+  border-color: var(--accent);
+}
+
+.draft-missing-item.selected {
+  border-color: var(--accent);
+  background: rgba(37, 99, 235, 0.1);
+}
+
+.draft-missing-item strong {
+  font-size: 0.78rem;
+}
+
+.draft-missing-item small {
+  color: var(--muted);
+  text-align: right;
+}
+
+
+/* DCI-style fantasy recap */
+
+.fantasy-recap-panel {
+  padding: 0;
+  overflow: hidden;
+}
+
+.fantasy-recap-panel > .section-title-row {
+  padding: 22px 24px;
+  margin: 0;
+}
+
+.fantasy-recap-wrap {
+  width: 100%;
+  overflow-x: auto;
+  border-top: 1px solid #ccd3df;
+}
+
+.fantasy-recap-table {
+  width: max-content;
+  min-width: 2100px;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+  font-size: 0.74rem;
+}
+
+.fantasy-recap-table th,
+.fantasy-recap-table td {
+  min-width: 84px;
+  height: 58px;
+  padding: 6px 7px;
+  text-align: center;
+  vertical-align: middle;
+  border-right: 1px solid #ccd3df;
+  border-bottom: 1px solid #ccd3df;
+  background: #ffffff;
+}
+
+.fantasy-recap-table thead th {
+  color: #111827;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.fantasy-recap-table .recap-section-heading {
+  height: 40px;
+  background: #f1f4f9;
+  color: #0645e5;
+  font-size: 0.82rem;
+  font-weight: 800;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.fantasy-recap-table .recap-caption-row th {
+  height: 44px;
+  background: #ffffff;
+  font-size: 0.73rem;
+}
+
+.fantasy-recap-table .recap-subcaption-row th {
+  height: 42px;
+  background: #f8fafc;
+  font-size: 0.69rem;
+  font-weight: 500;
+}
+
+.fantasy-recap-table .recap-team-column,
+.fantasy-recap-table .recap-team-cell {
+  position: sticky;
+  left: 0;
+  min-width: 185px;
+  width: 185px;
+  text-align: left;
+  z-index: 4;
+  box-shadow: 2px 0 0 #ccd3df;
+}
+
+.fantasy-recap-table .recap-team-column {
+  background: #ffffff;
+  color: #0645e5;
+  font-size: 0.8rem;
+}
+
+.fantasy-recap-table .recap-team-cell {
+  background: #ffffff;
+  padding: 10px 14px;
+}
+
+.recap-team-cell strong {
+  display: block;
+  color: #0645e5;
+  font-size: 0.78rem;
+  text-transform: uppercase;
+}
+
+.recap-team-cell small,
+.recap-team-cell span {
+  display: block;
+  margin-top: 3px;
+  color: #5f6775;
+  font-size: 0.68rem;
+}
+
+.recap-slot strong {
+  display: block;
+  max-width: 110px;
+  margin: 0 auto;
+  overflow: hidden;
+  color: #0645e5;
+  font-size: 0.67rem;
+  text-overflow: ellipsis;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.recap-slot small {
+  display: block;
+  margin-top: 5px;
+  color: #111827;
+  font-size: 0.79rem;
+  font-variant-numeric: tabular-nums;
+}
+
+.recap-slot-missing {
+  background: #fff8f8 !important;
+}
+
+.recap-slot-missing strong {
+  color: #b42318;
+}
+
+.recap-multiplier {
+  display: block;
+  margin-top: 2px;
+  color: #667085;
+  font-size: 0.61rem;
+}
+
+.recap-caption-total,
+.recap-section-total,
+.recap-total-heading,
+.recap-caption-total-heading {
+  background: #f0f1f3 !important;
+  font-weight: 700;
+}
+
+.recap-section-total {
+  min-width: 76px !important;
+  border-right: 2px solid #9ca3af !important;
+}
+
+.recap-overall-heading,
+.recap-overall-total {
+  min-width: 90px !important;
+  background: #e5e7eb !important;
+  font-size: 0.82rem;
+  font-weight: 800;
+}
+
+.recap-partial-total {
+  color: #9a6700;
+}
+
+.recap-partial-total small {
+  display: block;
+  margin-top: 2px;
+  font-size: 0.55rem;
+  letter-spacing: 0.04em;
+}
+
+.scoring-formula {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(150px, 1fr));
+  gap: 10px;
+  margin: 18px 0;
+}
+
+.scoring-formula span {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 12px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--surface);
+  font-size: 0.78rem;
+}
+
+@media (max-width: 900px) {
+  .draft-summary-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .scoring-formula {
+    grid-template-columns: 1fr 1fr;
+  }
+}
+
+@media (max-width: 560px) {
+  .scoring-formula {
+    grid-template-columns: 1fr;
+  }
+}
