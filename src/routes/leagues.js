@@ -307,6 +307,7 @@ router.get(
         rosters,
         captionWeights: captionWeightsResult.rows,
         requiredPicksPerTeam,
+        currentUserId: req.user.id,
         formatScore
       });
     } catch (error) {
