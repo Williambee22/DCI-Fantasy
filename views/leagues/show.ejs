@@ -3,18 +3,21 @@
 <%
   const recapGroups = [
     {
+      key: 'ge',
       title: 'GENERAL EFFECT',
       totalLabel: 'GE TOT',
       totalField: 'ge_points',
       captions: ['GE1', 'GE2']
     },
     {
+      key: 'visual',
       title: 'VISUAL',
       totalLabel: 'VIS TOT',
       totalField: 'visual_points',
       captions: ['VP', 'VA', 'CG']
     },
     {
+      key: 'music',
       title: 'MUSIC',
       totalLabel: 'MUS TOT',
       totalField: 'music_points',
@@ -38,7 +41,24 @@
 
   const safeNumber = (value) => {
     const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : 0;
+
+    return Number.isFinite(parsed)
+      ? parsed
+      : 0;
+  };
+
+  const shortLabel = (label) => {
+    const labels = {
+      Repertoire: 'Rep',
+      Performance: 'Perf',
+      Content: 'Cont',
+      Achievement: 'Achv',
+      Composition: 'Comp',
+      Vocabulary: 'Vocab',
+      Excellence: 'Excl'
+    };
+
+    return labels[label] || label;
   };
 
   const findPick = (
@@ -69,6 +89,14 @@
     return safeNumber(pick.points);
   };
 
+  const pickMultiplier = (pick) => {
+    if (!pick || pick.component_weight == null) {
+      return 1;
+    }
+
+    return safeNumber(pick.component_weight);
+  };
+
   const pickWeightedScore = (pick) => {
     if (!pick) {
       return 0;
@@ -80,9 +108,60 @@
 
     return (
       safeNumber(pickRawScore(pick))
-      * safeNumber(pick.component_weight || 1)
+      * pickMultiplier(pick)
     );
   };
+
+  const viewerUserId =
+    typeof currentUserId !== 'undefined'
+    && currentUserId
+      ? String(currentUserId)
+      : (
+          typeof currentUser !== 'undefined'
+          && currentUser
+            ? String(currentUser.id)
+            : ''
+        );
+
+  const yourPicks =
+    rosters[viewerUserId]
+    || [];
+
+  const yourFilledSlots = new Set(
+    yourPicks.map((pick) => (
+      `${pick.caption_code}:${pick.component}`
+    ))
+  );
+
+  const yourMissingSlots = [];
+
+  captionWeights.forEach((caption) => {
+    if (
+      !yourFilledSlots.has(
+        `${caption.code}:FIRST`
+      )
+    ) {
+      yourMissingSlots.push({
+        captionCode: caption.code,
+        captionName: caption.name,
+        component: 'FIRST',
+        componentLabel: caption.first_label
+      });
+    }
+
+    if (
+      !yourFilledSlots.has(
+        `${caption.code}:SECOND`
+      )
+    ) {
+      yourMissingSlots.push({
+        captionCode: caption.code,
+        captionName: caption.name,
+        component: 'SECOND',
+        componentLabel: caption.second_label
+      });
+    }
+  });
 %>
 
 <div class="page-heading split-heading">
@@ -158,20 +237,74 @@
   </div>
 </div>
 
-<section class="panel roster-rule-panel">
-  <p class="eyebrow">Draft structure</p>
+<div class="draft-summary-grid">
+  <section class="panel roster-rule-panel">
+    <p class="eyebrow">Draft structure</p>
 
-  <h2>
-    <%= requiredPicksPerTeam %> required picks per team
-  </h2>
+    <h2>
+      <%= requiredPicksPerTeam %> required picks per team
+    </h2>
 
-  <p class="muted">
-    Every manager must fill both subcaption positions
-    for every caption. Each exact corps, caption, and
-    subcaption combination can only be drafted once
-    throughout the league.
-  </p>
-</section>
+    <p class="muted">
+      Every manager must draft one first subcaption and
+      one second subcaption from every caption. Each exact
+      corps, caption, and subcaption combination can only
+      be drafted once throughout the league.
+    </p>
+
+    <% if (league.draft_status !== 'SETUP') { %>
+      <a
+        class="button secondary small top-gap"
+        href="/leagues/<%= league.id %>/draft"
+      >
+        View live draft
+      </a>
+    <% } %>
+  </section>
+
+  <section class="panel missing-summary-panel">
+    <div class="missing-summary-heading">
+      <div>
+        <p class="eyebrow">Your remaining needs</p>
+
+        <h2>
+          <% if (yourMissingSlots.length) { %>
+            <%= yourMissingSlots.length %>
+            slot<%= yourMissingSlots.length === 1 ? '' : 's' %>
+            remaining
+          <% } else { %>
+            Roster complete
+          <% } %>
+        </h2>
+      </div>
+
+      <strong class="missing-progress">
+        <%= yourPicks.length %>/<%= requiredPicksPerTeam %>
+      </strong>
+    </div>
+
+    <% if (!yourMissingSlots.length) { %>
+      <p class="roster-complete-message">
+        You have filled both subcaption positions for
+        every caption.
+      </p>
+    <% } else { %>
+      <div class="missing-chip-list">
+        <% yourMissingSlots.forEach((slot) => { %>
+          <span class="missing-chip">
+            <strong>
+              <%= slot.captionName %>
+            </strong>
+
+            <small>
+              <%= slot.componentLabel %>
+            </small>
+          </span>
+        <% }) %>
+      </div>
+    <% } %>
+  </section>
+</div>
 
 <% if (
   league.draft_status === 'SETUP'
@@ -258,6 +391,7 @@
     <div class="section-title-row">
       <div>
         <p class="eyebrow">Leaderboard</p>
+
         <h2>Season standings</h2>
       </div>
 
@@ -624,7 +758,7 @@
           %>
             <th
               colspan="<%= group.captions.length * 3 + 1 %>"
-              class="recap-section-heading"
+              class="recap-section-heading recap-section-<%= group.key %>"
             >
               <%= group.title %>
             </th>
@@ -643,11 +777,16 @@
             (group) => {
           %>
             <% group.captions.forEach(
-              (captionCode) => {
+              (captionCode, captionIndex) => {
                 const caption =
                   captionByCode[captionCode];
             %>
-              <th colspan="3">
+              <th
+                colspan="3"
+                class="<%= captionIndex === 0
+                  ? 'recap-group-start'
+                  : '' %>"
+              >
                 <%= caption
                   ? caption.name
                   : captionCode %>
@@ -668,20 +807,24 @@
             (group) => {
           %>
             <% group.captions.forEach(
-              (captionCode) => {
+              (captionCode, captionIndex) => {
                 const caption =
                   captionByCode[captionCode];
             %>
-              <th>
+              <th
+                class="<%= captionIndex === 0
+                  ? 'recap-group-start'
+                  : '' %>"
+              >
                 <%= caption
-                  ? caption.first_label
-                  : 'Content' %>
+                  ? shortLabel(caption.first_label)
+                  : 'Cont' %>
               </th>
 
               <th>
                 <%= caption
-                  ? caption.second_label
-                  : 'Achievement' %>
+                  ? shortLabel(caption.second_label)
+                  : 'Achv' %>
               </th>
 
               <th class="recap-caption-total-heading">
@@ -695,7 +838,9 @@
       <tbody>
         <% members.forEach((member) => {
           const picks =
-            rosters[member.user_id] || [];
+            rosters[member.user_id]
+            || rosters[String(member.user_id)]
+            || [];
 
           const teamStanding =
             standingsByUser[
@@ -726,7 +871,7 @@
               (group) => {
             %>
               <% group.captions.forEach(
-                (captionCode) => {
+                (captionCode, captionIndex) => {
                   const firstPick = findPick(
                     picks,
                     captionCode,
@@ -755,12 +900,20 @@
                     );
               %>
                 <td
-                  class="recap-slot <%= firstPick
-                    ? 'recap-slot-filled'
-                    : 'recap-slot-missing' %>"
+                  class="
+                    recap-slot
+                    <%= firstPick
+                      ? 'recap-slot-filled'
+                      : 'recap-slot-missing' %>
+                    <%= captionIndex === 0
+                      ? 'recap-group-start'
+                      : '' %>
+                  "
                 >
                   <% if (firstPick) { %>
-                    <strong>
+                    <strong
+                      title="<%= firstPick.corps_name %>"
+                    >
                       <%= firstPick.corps_name %>
                     </strong>
 
@@ -769,13 +922,11 @@
                     </small>
 
                     <% if (
-                      safeNumber(
-                        firstPick.component_weight
-                      ) !== 1
+                      pickMultiplier(firstPick) !== 1
                     ) { %>
                       <span class="recap-multiplier">
-                        ×<%= safeNumber(
-                          firstPick.component_weight
+                        ×<%= pickMultiplier(
+                          firstPick
                         ).toFixed(3) %>
                       </span>
                     <% } %>
@@ -791,7 +942,9 @@
                     : 'recap-slot-missing' %>"
                 >
                   <% if (secondPick) { %>
-                    <strong>
+                    <strong
+                      title="<%= secondPick.corps_name %>"
+                    >
                       <%= secondPick.corps_name %>
                     </strong>
 
@@ -800,13 +953,11 @@
                     </small>
 
                     <% if (
-                      safeNumber(
-                        secondPick.component_weight
-                      ) !== 1
+                      pickMultiplier(secondPick) !== 1
                     ) { %>
                       <span class="recap-multiplier">
-                        ×<%= safeNumber(
-                          secondPick.component_weight
+                        ×<%= pickMultiplier(
+                          secondPick
                         ).toFixed(3) %>
                       </span>
                     <% } %>
@@ -817,13 +968,19 @@
                 </td>
 
                 <td
-                  class="score recap-caption-total <%= captionComplete
-                    ? ''
-                    : 'recap-partial-total' %>"
+                  class="
+                    score
+                    recap-caption-total
+                    <%= captionComplete
+                      ? ''
+                      : 'recap-partial-total' %>
+                  "
                 >
-                  <%= formatScore(
-                    captionTotal
-                  ) %>
+                  <strong>
+                    <%= formatScore(
+                      captionTotal
+                    ) %>
+                  </strong>
 
                   <% if (!captionComplete) { %>
                     <small>PARTIAL</small>
@@ -832,16 +989,20 @@
               <% }) %>
 
               <td class="score recap-section-total">
-                <%= formatScore(
-                  teamStanding[group.totalField]
-                ) %>
+                <strong>
+                  <%= formatScore(
+                    teamStanding[group.totalField]
+                  ) %>
+                </strong>
               </td>
             <% }) %>
 
             <td class="score recap-overall-total">
-              <%= formatScore(
-                teamStanding.total_points
-              ) %>
+              <strong>
+                <%= formatScore(
+                  teamStanding.total_points
+                ) %>
+              </strong>
             </td>
           </tr>
         <% }) %>
