@@ -1657,3 +1657,77 @@ small {
     grid-template-columns: 1fr;
   }
 }
+
+
+
+/* =====================================================
+   FORCE FANTASY RECAP TOT TEXT TO WHITE
+===================================================== */
+
+.fantasy-recap-table td.recap-caption-total,
+.fantasy-recap-table td.recap-caption-total.score,
+.fantasy-recap-table th.recap-caption-total-heading {
+  color: #ffffff !important;
+}
+
+.fantasy-recap-table td.recap-caption-total *,
+.fantasy-recap-table th.recap-caption-total-heading * {
+  color: #ffffff !important;
+}
+
+
+/* Normal TOT cells */
+.fantasy-recap-table td.recap-caption-total {
+  background:
+    linear-gradient(
+      180deg,
+      #697786 0%,
+      #53677f 20%,
+      #385879 50%,
+      #29496e 75%,
+      #233f61 100%
+    ) !important;
+
+  color: #ffffff !important;
+}
+
+
+/* TOT header */
+.fantasy-recap-table th.recap-caption-total-heading {
+  background:
+    linear-gradient(
+      180deg,
+      #596879 0%,
+      #3d5879 35%,
+      #29486f 70%,
+      #203b61 100%
+    ) !important;
+
+  color: #ffffff !important;
+  font-weight: 900 !important;
+}
+
+
+/* Partial TOT cells */
+.fantasy-recap-table
+td.recap-caption-total.recap-partial-total,
+.fantasy-recap-table
+td.recap-caption-total.recap-partial-total * {
+  color: #ffffff !important;
+}
+
+
+/* Specifically override the site's yellow score color */
+.data-table.fantasy-recap-table
+td.score.recap-caption-total {
+  color: #ffffff !important;
+}
+
+.data-table.fantasy-recap-table
+td.score.recap-caption-total strong,
+.data-table.fantasy-recap-table
+td.score.recap-caption-total small,
+.data-table.fantasy-recap-table
+td.score.recap-caption-total span {
+  color: #ffffff !important;
+}
