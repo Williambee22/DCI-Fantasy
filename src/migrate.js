@@ -7,14 +7,62 @@ const {
 } = require('./utils');
 
 const captions = [
-  ['GE1', 'General Effect 1', 'Repertoire', 'Performance', 10],
-  ['GE2', 'General Effect 2', 'Repertoire', 'Performance', 20],
-  ['VP', 'Visual Proficiency', 'Content', 'Achievement', 30],
-  ['VA', 'Visual Analysis', 'Composition', 'Achievement', 40],
-  ['CG', 'Color Guard', 'Content', 'Achievement', 50],
-  ['BRASS', 'Brass', 'Content', 'Achievement', 60],
-  ['MA', 'Music Analysis', 'Content', 'Achievement', 70],
-  ['PERC', 'Percussion', 'Content', 'Achievement', 80]
+  [
+    'GE1',
+    'General Effect 1',
+    'Repertoire',
+    'Performance',
+    10
+  ],
+  [
+    'GE2',
+    'General Effect 2',
+    'Repertoire',
+    'Performance',
+    20
+  ],
+  [
+    'VP',
+    'Visual Proficiency',
+    'Content',
+    'Achievement',
+    30
+  ],
+  [
+    'VA',
+    'Visual Analysis',
+    'Composition',
+    'Achievement',
+    40
+  ],
+  [
+    'CG',
+    'Color Guard',
+    'Content',
+    'Achievement',
+    50
+  ],
+  [
+    'BRASS',
+    'Brass',
+    'Content',
+    'Achievement',
+    60
+  ],
+  [
+    'MA',
+    'Music Analysis',
+    'Content',
+    'Achievement',
+    70
+  ],
+  [
+    'PERC',
+    'Percussion',
+    'Content',
+    'Achievement',
+    80
+  ]
 ];
 
 const corps = [
@@ -60,10 +108,16 @@ async function migrate() {
       password_hash TEXT NOT NULL,
 
       site_role VARCHAR(20) NOT NULL DEFAULT 'USER'
-        CHECK (site_role IN ('USER', 'ADMIN')),
+        CHECK (
+          site_role IN (
+            'USER',
+            'ADMIN'
+          )
+        ),
 
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
 
     CREATE TABLE IF NOT EXISTS corps (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -77,6 +131,7 @@ async function migrate() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
+
     CREATE TABLE IF NOT EXISTS captions (
       code VARCHAR(20) PRIMARY KEY,
 
@@ -88,6 +143,7 @@ async function migrate() {
 
       sort_order INTEGER NOT NULL
     );
+
 
     CREATE TABLE IF NOT EXISTS leagues (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -102,11 +158,15 @@ async function migrate() {
 
       season_year INTEGER NOT NULL
         DEFAULT (
-          EXTRACT(YEAR FROM CURRENT_DATE)::int
+          EXTRACT(
+            YEAR FROM CURRENT_DATE
+          )::int
         ),
 
       roster_size INTEGER NOT NULL DEFAULT 16
-        CHECK (roster_size BETWEEN 1 AND 32),
+        CHECK (
+          roster_size BETWEEN 1 AND 32
+        ),
 
       draft_status VARCHAR(20) NOT NULL DEFAULT 'SETUP'
         CHECK (
@@ -124,6 +184,7 @@ async function migrate() {
 
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
+
 
     CREATE TABLE IF NOT EXISTS league_members (
       league_id UUID NOT NULL
@@ -150,6 +211,7 @@ async function migrate() {
         draft_position
       )
     );
+
 
     /*
      * Stores commissioner scoring multipliers for
@@ -181,6 +243,7 @@ async function migrate() {
         caption_code
       )
     );
+
 
     CREATE TABLE IF NOT EXISTS draft_picks (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
@@ -231,6 +294,21 @@ async function migrate() {
       )
     );
 
+
+    /*
+     * Each event can use either:
+     *
+     * STANDARD:
+     * One judge for every caption.
+     *
+     * DOUBLE:
+     * Two GE1 judges,
+     * two GE2 judges,
+     * two Music Analysis judges.
+     *
+     * VP, VA, CG, Brass, and Percussion still
+     * use one judge.
+     */
     CREATE TABLE IF NOT EXISTS events (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
@@ -246,6 +324,14 @@ async function migrate() {
 
       source_kind VARCHAR(30) NOT NULL DEFAULT 'MANUAL',
 
+      panel_type VARCHAR(20) NOT NULL DEFAULT 'STANDARD'
+        CHECK (
+          panel_type IN (
+            'STANDARD',
+            'DOUBLE'
+          )
+        ),
+
       finalized BOOLEAN NOT NULL DEFAULT TRUE,
 
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
@@ -253,6 +339,19 @@ async function migrate() {
       updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
+
+    /*
+     * Aggregate / compatibility score table.
+     *
+     * For a standard panel, these are the single
+     * judge's scores.
+     *
+     * For a double panel, these can contain the
+     * averaged Content/Achievement values.
+     *
+     * Judge-level scores are stored separately
+     * in score_panels below.
+     */
     CREATE TABLE IF NOT EXISTS scores (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
@@ -281,6 +380,75 @@ async function migrate() {
       )
     );
 
+
+    /*
+     * Individual judge scores.
+     *
+     * Standard panel:
+     * judge_number = 1
+     *
+     * Double panel:
+     *
+     * GE1:
+     * judge_number 1
+     * judge_number 2
+     *
+     * GE2:
+     * judge_number 1
+     * judge_number 2
+     *
+     * MA:
+     * judge_number 1
+     * judge_number 2
+     *
+     * All other captions use judge_number 1.
+     */
+    CREATE TABLE IF NOT EXISTS score_panels (
+      id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+
+      event_id UUID NOT NULL
+        REFERENCES events(id)
+        ON DELETE CASCADE,
+
+      corps_id UUID NOT NULL
+        REFERENCES corps(id)
+        ON DELETE CASCADE,
+
+      caption_code VARCHAR(20) NOT NULL
+        REFERENCES captions(code)
+        ON DELETE RESTRICT,
+
+      judge_number INTEGER NOT NULL DEFAULT 1
+        CHECK (
+          judge_number IN (
+            1,
+            2
+          )
+        ),
+
+      first_score NUMERIC(6,3)
+        CHECK (
+          first_score IS NULL
+          OR first_score BETWEEN 0 AND 10
+        ),
+
+      second_score NUMERIC(6,3)
+        CHECK (
+          second_score IS NULL
+          OR second_score BETWEEN 0 AND 10
+        ),
+
+      updated_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+
+      UNIQUE (
+        event_id,
+        corps_id,
+        caption_code,
+        judge_number
+      )
+    );
+
+
     CREATE TABLE IF NOT EXISTS sync_runs (
       id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
 
@@ -293,8 +461,10 @@ async function migrate() {
       created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
     );
 
+
     CREATE INDEX IF NOT EXISTS idx_members_user
       ON league_members(user_id);
+
 
     CREATE INDEX IF NOT EXISTS idx_picks_league_user
       ON draft_picks(
@@ -302,8 +472,12 @@ async function migrate() {
         user_id
       );
 
+
     CREATE INDEX IF NOT EXISTS idx_weights_league
-      ON league_caption_weights(league_id);
+      ON league_caption_weights(
+        league_id
+      );
+
 
     CREATE INDEX IF NOT EXISTS idx_scores_corps_caption
       ON scores(
@@ -311,9 +485,35 @@ async function migrate() {
         caption_code
       );
 
+
+    CREATE INDEX IF NOT EXISTS idx_score_panels_event
+      ON score_panels(
+        event_id
+      );
+
+
+    CREATE INDEX IF NOT EXISTS idx_score_panels_corps_caption
+      ON score_panels(
+        corps_id,
+        caption_code
+      );
+
+
+    CREATE INDEX IF NOT EXISTS idx_score_panels_lookup
+      ON score_panels(
+        event_id,
+        corps_id,
+        caption_code,
+        judge_number
+      );
+
+
     CREATE INDEX IF NOT EXISTS idx_events_date
-      ON events(event_date DESC);
+      ON events(
+        event_date DESC
+      );
   `);
+
 
   /*
    * Update databases created by older versions.
@@ -322,24 +522,87 @@ async function migrate() {
     ALTER TABLE leagues
       ADD COLUMN IF NOT EXISTS season_year INTEGER;
 
+
     UPDATE leagues
     SET season_year =
-      EXTRACT(YEAR FROM created_at)::int
+      EXTRACT(
+        YEAR FROM created_at
+      )::int
     WHERE season_year IS NULL;
 
+
     ALTER TABLE leagues
-      ALTER COLUMN season_year SET NOT NULL;
+      ALTER COLUMN season_year
+      SET NOT NULL;
+
 
     ALTER TABLE leagues
       ALTER COLUMN season_year
       SET DEFAULT (
-        EXTRACT(YEAR FROM CURRENT_DATE)::int
+        EXTRACT(
+          YEAR FROM CURRENT_DATE
+        )::int
       );
+
 
     ALTER TABLE leagues
       ALTER COLUMN roster_size
       SET DEFAULT 16;
+
+
+    /*
+     * Older events did not have panel_type.
+     */
+    ALTER TABLE events
+      ADD COLUMN IF NOT EXISTS panel_type VARCHAR(20);
+
+
+    UPDATE events
+    SET panel_type = 'STANDARD'
+    WHERE panel_type IS NULL;
+
+
+    ALTER TABLE events
+      ALTER COLUMN panel_type
+      SET DEFAULT 'STANDARD';
+
+
+    ALTER TABLE events
+      ALTER COLUMN panel_type
+      SET NOT NULL;
   `);
+
+
+  /*
+   * Add the panel_type CHECK constraint to older
+   * databases if it does not already exist.
+   *
+   * PostgreSQL does not support a simple
+   * ADD CONSTRAINT IF NOT EXISTS, so this block
+   * checks pg_constraint first.
+   */
+  await query(`
+    DO $$
+    BEGIN
+      IF NOT EXISTS (
+        SELECT 1
+        FROM pg_constraint
+        WHERE conname = 'events_panel_type_check'
+          AND conrelid = 'events'::regclass
+      ) THEN
+        ALTER TABLE events
+        ADD CONSTRAINT events_panel_type_check
+        CHECK (
+          panel_type IN (
+            'STANDARD',
+            'DOUBLE'
+          )
+        );
+      END IF;
+    END
+    $$;
+  `);
+
 
   /*
    * Insert or update all captions and corps before
@@ -386,6 +649,7 @@ async function migrate() {
       ]);
     }
 
+
     for (const name of corps) {
       await client.query(`
         INSERT INTO corps (
@@ -405,6 +669,7 @@ async function migrate() {
       ]);
     }
   });
+
 
   /*
    * Upgrade existing leagues and draft picks.
@@ -443,6 +708,7 @@ async function migrate() {
 
     WHERE dp.id = duplicates.id;
 
+
     /*
      * Temporarily make pick numbers negative so they
      * can be safely renumbered without violating the
@@ -450,6 +716,7 @@ async function migrate() {
      */
     UPDATE draft_picks
     SET pick_number = -ABS(pick_number);
+
 
     WITH ranked_picks AS (
       SELECT
@@ -474,6 +741,7 @@ async function migrate() {
 
     WHERE dp.id = ranked_picks.id;
 
+
     /*
      * Prevent one manager from drafting two assets
      * for the same caption/subcaption roster slot.
@@ -491,6 +759,7 @@ async function migrate() {
       caption_code,
       component
     );
+
 
     /*
      * Every league now requires two picks for every
@@ -515,6 +784,7 @@ async function migrate() {
 
       updated_at = NOW();
 
+
     /*
      * Recalculate whether existing drafts are setup,
      * active, paused, or complete.
@@ -534,11 +804,13 @@ async function migrate() {
           )
         THEN 'SETUP'
 
+
         /*
          * Preserve manually paused drafts.
          */
         WHEN l.draft_status = 'PAUSED'
         THEN 'PAUSED'
+
 
         /*
          * Complete only when at least one manager
@@ -550,6 +822,7 @@ async function migrate() {
           FROM league_members lm
           WHERE lm.league_id = l.id
         )
+
         AND NOT EXISTS (
           SELECT 1
 
@@ -582,6 +855,7 @@ async function migrate() {
                   components.component
             )
         )
+
         THEN 'COMPLETE'
 
         ELSE 'ACTIVE'
@@ -589,6 +863,7 @@ async function migrate() {
 
       updated_at = NOW();
   `);
+
 
   /*
    * Add normal 1.000 scoring multipliers for every
@@ -619,8 +894,55 @@ async function migrate() {
     DO NOTHING;
   `);
 
+
+  /*
+   * Backfill old score data into score_panels.
+   *
+   * Anything already stored in the old scores
+   * table becomes Judge 1.
+   *
+   * This means all existing standard-panel events
+   * continue working without re-entering scores.
+   *
+   * DO NOTHING is important here. If judge-level
+   * data already exists, the migration will not
+   * overwrite it.
+   */
+  await query(`
+    INSERT INTO score_panels (
+      event_id,
+      corps_id,
+      caption_code,
+      judge_number,
+      first_score,
+      second_score,
+      updated_at
+    )
+
+    SELECT
+      s.event_id,
+      s.corps_id,
+      s.caption_code,
+      1,
+      s.first_score,
+      s.second_score,
+      s.updated_at
+
+    FROM scores s
+
+    ON CONFLICT (
+      event_id,
+      corps_id,
+      caption_code,
+      judge_number
+    )
+    DO NOTHING;
+  `);
+
+
   await bootstrapAdmin();
 }
+
 
 async function bootstrapAdmin() {
   const email = normalizeEmail(
@@ -631,11 +953,13 @@ async function bootstrapAdmin() {
     return;
   }
 
+
   const existing = await query(`
     SELECT id
     FROM users
     WHERE email = $1
   `, [email]);
+
 
   if (existing.rowCount) {
     await query(`
@@ -650,21 +974,32 @@ async function bootstrapAdmin() {
     return;
   }
 
+
   if (!config.adminBootstrapPassword) {
     return;
   }
+
 
   const passwordHash = await bcrypt.hash(
     config.adminBootstrapPassword,
     12
   );
 
+
   let username = String(
-    config.adminBootstrapUsername || 'headadmin'
+    config.adminBootstrapUsername
+    || 'headadmin'
   )
-    .replace(/[^a-zA-Z0-9_]/g, '')
-    .slice(0, 40)
+    .replace(
+      /[^a-zA-Z0-9_]/g,
+      ''
+    )
+    .slice(
+      0,
+      40
+    )
     || 'headadmin';
+
 
   const usernameTaken = await query(`
     SELECT 1
@@ -672,11 +1007,18 @@ async function bootstrapAdmin() {
     WHERE username = $1
   `, [username]);
 
+
   if (usernameTaken.rowCount) {
     username =
-      `${username}${Date.now().toString().slice(-4)}`
-        .slice(0, 40);
+      `${username}${Date.now()
+        .toString()
+        .slice(-4)}`
+        .slice(
+          0,
+          40
+        );
   }
+
 
   await query(`
     INSERT INTO users (
@@ -697,6 +1039,7 @@ async function bootstrapAdmin() {
     passwordHash
   ]);
 }
+
 
 module.exports = {
   migrate
