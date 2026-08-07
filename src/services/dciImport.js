@@ -1,198 +1,272 @@
-const cheerio = require('cheerio');
-
-const {
-  query,
-  withTransaction
-} = require('../db');
-
-const config = require('../config');
-
-const {
-  slugify
-} = require('../utils');
-
-const dciParsing = require('./dciParsing');
-
-const {
-  parseNumbers,
-  extractStandardRowScores,
-  parseDateFromText
-} = dciParsing;
-
 /*
- * Once dciParsing.js is upgraded, it can export:
+ * =====================================================
+ * STANDARD PANEL POSITIONS
+ * =====================================================
  *
- * extractDoubleRowScores()
+ * These indexes are based on the numeric values
+ * extracted from a normal DCI recap row.
  *
- * Until then, standard-panel imports will continue
- * working normally.
- */
-const extractDoubleRowScores =
-  typeof dciParsing.extractDoubleRowScores === 'function'
-    ? dciParsing.extractDoubleRowScores
-    : null;
-
-
-/*
- * These are the only captions that use two judges
- * on the double-panel format.
- */
-const DOUBLE_JUDGE_CAPTIONS = new Set([
-  'GE1',
-  'GE2',
-  'MA'
-]);
-
-
-/*
- * =====================================================
- * IMPORT PERMISSION
- * =====================================================
- */
-
-function assertImportAllowed() {
-  if (
-    !config.dciImportEnabled
-    || !config.dciPermissionConfirmed
-  ) {
-    throw new Error(
-      'DCI import is disabled. Set DCI_IMPORT_ENABLED=true and DCI_PERMISSION_CONFIRMED=true only after receiving permission to reuse DCI score reports.'
-    );
-  }
-
-  if (!config.dciContactEmail) {
-    throw new Error(
-      'DCI_CONTACT_EMAIL is required for an identifiable importer user agent.'
-    );
-  }
-}
-
-
-/*
- * =====================================================
- * FETCH HTML
- * =====================================================
- */
-
-async function fetchHtml(url) {
-  const response = await fetch(
-    url,
-    {
-      headers: {
-        'user-agent':
-          `CorpsDraft/1.0 score-import (${config.dciContactEmail})`,
-
-        accept:
-          'text/html,application/xhtml+xml'
-      },
-
-      signal:
-        AbortSignal.timeout(20_000)
-    }
-  );
-
-  if (!response.ok) {
-    throw new Error(
-      `DCI returned HTTP ${response.status} for ${url}`
-    );
-  }
-
-  return response.text();
-}
-
-
-/*
- * =====================================================
- * SCORE HELPERS
- * =====================================================
- */
-
-/*
- * Average duplicate judge scores separately.
+ * Placement numbers and caption totals are included
+ * in the number array, which is why the indexes jump.
  *
  * Example:
  *
- * Judge 1 Content = 9.800
- * Judge 2 Content = 9.700
- *
- * official Content = 9.750
- *
- *
- * Judge 1 Achievement = 9.900
- * Judge 2 Achievement = 9.850
- *
- * official Achievement = 9.875
+ * GE1
+ * Content       index 0
+ * placement     index 1
+ * Achievement   index 2
+ * placement     index 3
+ * total         index 4
+ * placement     index 5
  */
-function averageAvailable(
-  first,
-  second
-) {
-  const a =
-    first == null
-      ? null
-      : Number(first);
+const STANDARD_POSITIONS = {
+  GE1: [0, 2],
+  GE2: [6, 8],
 
-  const b =
-    second == null
-      ? null
-      : Number(second);
+  VP: [14, 16],
+  VA: [20, 22],
+  CG: [26, 28],
 
-  if (
-    a != null
-    && Number.isFinite(a)
-    && b != null
-    && Number.isFinite(b)
-  ) {
-    return (
-      a + b
-    ) / 2;
+  BRASS: [34, 36],
+  MA: [40, 42],
+  PERC: [46, 48]
+};
+
+
+/*
+ * =====================================================
+ * DOUBLE PANEL POSITIONS
+ * =====================================================
+ *
+ * Double-panel structure:
+ *
+ * GE1 Judge 1
+ * GE1 Judge 2
+ *
+ * GE2 Judge 1
+ * GE2 Judge 2
+ *
+ * GE Total
+ *
+ * VP
+ * VA
+ * CG
+ * Visual Total
+ *
+ * Brass
+ *
+ * MA Judge 1
+ * MA Judge 2
+ *
+ * Percussion
+ * Music Total
+ *
+ * Overall Total
+ *
+ *
+ * Using your Bluecoats example:
+ *
+ * GE1 J1:
+ * 9.800
+ * 9.900
+ *
+ * GE1 J2:
+ * 9.800
+ * 9.900
+ *
+ * GE2 J1:
+ * 9.800
+ * 9.800
+ *
+ * GE2 J2:
+ * 9.900
+ * 9.900
+ *
+ * etc.
+ */
+const DOUBLE_POSITIONS = {
+  GE1: {
+    judge1: [0, 2],
+    judge2: [6, 8]
+  },
+
+  GE2: {
+    judge1: [12, 14],
+    judge2: [18, 20]
+  },
+
+  VP: {
+    judge1: [26, 28]
+  },
+
+  VA: {
+    judge1: [32, 34]
+  },
+
+  CG: {
+    judge1: [38, 40]
+  },
+
+  BRASS: {
+    judge1: [46, 48]
+  },
+
+  MA: {
+    judge1: [52, 54],
+    judge2: [58, 60]
+  },
+
+  PERC: {
+    judge1: [64, 66]
   }
+};
 
-  if (
-    a != null
-    && Number.isFinite(a)
-  ) {
-    return a;
-  }
 
-  if (
-    b != null
-    && Number.isFinite(b)
-  ) {
-    return b;
-  }
+/*
+ * Useful positions for validating that a row really
+ * looks like the double-panel format.
+ */
+const DOUBLE_TOTAL_POSITIONS = {
+  GE: 24,
+  VISUAL: 44,
+  MUSIC: 70,
+  OVERALL: 72
+};
 
-  return null;
+
+/*
+ * =====================================================
+ * NUMBER PARSING
+ * =====================================================
+ */
+
+function parseNumbers(text) {
+  return (
+    String(text)
+      .match(/\b\d+(?:\.\d+)?\b/g)
+    || []
+  ).map(Number);
 }
 
 
-function validateScore(value) {
+/*
+ * Content/Achievement scores must be between
+ * 0.000 and 10.000.
+ */
+function validSubcaption(value) {
   return (
-    value == null
-    || (
-      Number.isFinite(Number(value))
-      && Number(value) >= 0
-      && Number(value) <= 10
-    )
+    Number.isFinite(value)
+    && value >= 0
+    && value <= 10
   );
 }
 
 
 /*
- * Convert whatever the parser returns into a common
- * structure.
+ * Caption totals such as 19.700.
+ */
+function validCaptionTotal(value) {
+  return (
+    Number.isFinite(value)
+    && value >= 0
+    && value <= 20
+  );
+}
+
+
+/*
+ * Section totals:
  *
- * STANDARD:
+ * GE     <= 40
+ * Visual <= 30
+ * Music  <= 30
+ */
+function validSectionTotal(
+  value,
+  maximum
+) {
+  return (
+    Number.isFinite(value)
+    && value >= 0
+    && value <= maximum
+  );
+}
+
+
+/*
+ * Overall score.
+ */
+function validOverall(value) {
+  return (
+    Number.isFinite(value)
+    && value >= 0
+    && value <= 100
+  );
+}
+
+
+/*
+ * =====================================================
+ * STANDARD PANEL PARSER
+ * =====================================================
+ */
+
+function extractStandardRowScores(numbers) {
+  if (
+    !Array.isArray(numbers)
+    || numbers.length < 49
+  ) {
+    return null;
+  }
+
+  const output = {};
+
+  for (
+    const [
+      caption,
+      [
+        firstIndex,
+        secondIndex
+      ]
+    ]
+    of Object.entries(
+      STANDARD_POSITIONS
+    )
+  ) {
+    const first =
+      numbers[firstIndex];
+
+    const second =
+      numbers[secondIndex];
+
+    if (
+      !validSubcaption(first)
+      || !validSubcaption(second)
+    ) {
+      return null;
+    }
+
+    output[caption] = {
+      first,
+      second
+    };
+  }
+
+  return output;
+}
+
+
+/*
+ * =====================================================
+ * DOUBLE PANEL PARSER
+ * =====================================================
  *
- * {
- *   first: 9.800,
- *   second: 9.900
- * }
+ * This intentionally returns the duplicate judges
+ * instead of averaging them here.
  *
+ * dciImport.js receives:
  *
- * DOUBLE:
- *
- * {
+ * GE1: {
  *   judges: [
  *     {
  *       first: 9.800,
@@ -204,1009 +278,651 @@ function validateScore(value) {
  *     }
  *   ]
  * }
+ *
+ * dciImport.js then calculates:
+ *
+ * Content:
+ * (9.800 + 9.700) / 2
+ * = 9.750
+ *
+ * Achievement:
+ * (9.900 + 9.850) / 2
+ * = 9.875
  */
-function normalizeCaptionScore(
-  captionCode,
-  scoreData,
-  panelType
-) {
-  if (!scoreData) {
-    return {
-      judges: [],
-      first: null,
-      second: null
-    };
-  }
-
+function extractDoubleRowScores(numbers) {
   /*
-   * New double-panel parser structure.
+   * Your example reaches at least index 72 before
+   * the final score, so a standard row should never
+   * accidentally be interpreted as a double row.
    */
   if (
-    Array.isArray(scoreData.judges)
+    !Array.isArray(numbers)
+    || numbers.length < 73
   ) {
-    const judges =
-      scoreData.judges
-        .slice(0, 2)
-        .map((judge) => ({
-          first:
-            judge?.first == null
-              ? null
-              : Number(judge.first),
-
-          second:
-            judge?.second == null
-              ? null
-              : Number(judge.second)
-        }));
-
-    const judge1 =
-      judges[0] || {};
-
-    const judge2 =
-      judges[1] || {};
-
-    const shouldAverage =
-      panelType === 'DOUBLE'
-      && DOUBLE_JUDGE_CAPTIONS.has(
-        captionCode
-      );
-
-    return {
-      judges,
-
-      first:
-        shouldAverage
-          ? averageAvailable(
-              judge1.first,
-              judge2.first
-            )
-          : (
-              judge1.first
-              ?? null
-            ),
-
-      second:
-        shouldAverage
-          ? averageAvailable(
-              judge1.second,
-              judge2.second
-            )
-          : (
-              judge1.second
-              ?? null
-            )
-    };
+    return null;
   }
 
+
   /*
-   * Alternative parser structure:
-   *
-   * judge1: {...}
-   * judge2: {...}
+   * Validate the major totals as an additional
+   * safeguard against interpreting another table
+   * format as this double-panel format.
    */
-  if (
-    scoreData.judge1
-    || scoreData.judge2
-  ) {
-    const judge1 =
-      scoreData.judge1 || {};
-
-    const judge2 =
-      scoreData.judge2 || {};
-
-    const judges = [
-      {
-        first:
-          judge1.first == null
-            ? null
-            : Number(judge1.first),
-
-        second:
-          judge1.second == null
-            ? null
-            : Number(judge1.second)
-      }
+  const geTotal =
+    numbers[
+      DOUBLE_TOTAL_POSITIONS.GE
     ];
 
-    if (
-      scoreData.judge2
-    ) {
-      judges.push({
-        first:
-          judge2.first == null
-            ? null
-            : Number(judge2.first),
+  const visualTotal =
+    numbers[
+      DOUBLE_TOTAL_POSITIONS.VISUAL
+    ];
 
-        second:
-          judge2.second == null
-            ? null
-            : Number(judge2.second)
-      });
-    }
+  const musicTotal =
+    numbers[
+      DOUBLE_TOTAL_POSITIONS.MUSIC
+    ];
 
-    const shouldAverage =
-      panelType === 'DOUBLE'
-      && DOUBLE_JUDGE_CAPTIONS.has(
-        captionCode
-      );
+  const overallTotal =
+    numbers[
+      DOUBLE_TOTAL_POSITIONS.OVERALL
+    ];
 
-    return {
-      judges,
 
-      first:
-        shouldAverage
-          ? averageAvailable(
-              judge1.first,
-              judge2.first
-            )
-          : (
-              judge1.first
-              ?? null
-            ),
-
-      second:
-        shouldAverage
-          ? averageAvailable(
-              judge1.second,
-              judge2.second
-            )
-          : (
-              judge1.second
-              ?? null
-            )
-    };
+  if (
+    !validSectionTotal(
+      geTotal,
+      40
+    )
+    || !validSectionTotal(
+      visualTotal,
+      30
+    )
+    || !validSectionTotal(
+      musicTotal,
+      30
+    )
+    || !validOverall(
+      overallTotal
+    )
+  ) {
+    return null;
   }
+
+
+  const output = {};
+
 
   /*
-   * Current standard-panel parser structure.
+   * =================================================
+   * GENERAL EFFECT 1
+   * =================================================
    */
-  const first =
-    scoreData.first == null
-      ? null
-      : Number(scoreData.first);
 
-  const second =
-    scoreData.second == null
-      ? null
-      : Number(scoreData.second);
+  const ge1Judge1First =
+    numbers[
+      DOUBLE_POSITIONS
+        .GE1
+        .judge1[0]
+    ];
 
-  return {
+  const ge1Judge1Second =
+    numbers[
+      DOUBLE_POSITIONS
+        .GE1
+        .judge1[1]
+    ];
+
+  const ge1Judge2First =
+    numbers[
+      DOUBLE_POSITIONS
+        .GE1
+        .judge2[0]
+    ];
+
+  const ge1Judge2Second =
+    numbers[
+      DOUBLE_POSITIONS
+        .GE1
+        .judge2[1]
+    ];
+
+
+  if (
+    !validSubcaption(
+      ge1Judge1First
+    )
+    || !validSubcaption(
+      ge1Judge1Second
+    )
+    || !validSubcaption(
+      ge1Judge2First
+    )
+    || !validSubcaption(
+      ge1Judge2Second
+    )
+  ) {
+    return null;
+  }
+
+
+  output.GE1 = {
     judges: [
       {
-        first,
-        second
-      }
-    ],
+        first:
+          ge1Judge1First,
 
-    first,
-    second
+        second:
+          ge1Judge1Second
+      },
+
+      {
+        first:
+          ge1Judge2First,
+
+        second:
+          ge1Judge2Second
+      }
+    ]
   };
-}
 
 
-/*
- * Determine whether the parsed recap contains
- * duplicate judges.
- */
-function detectPanelType(rows) {
-  for (const row of rows) {
-    for (
-      const [
-        captionCode,
-        scoreData
-      ]
-      of Object.entries(
-        row.scores || {}
-      )
-    ) {
-      if (
-        !DOUBLE_JUDGE_CAPTIONS.has(
-          captionCode
-        )
-      ) {
-        continue;
-      }
+  /*
+   * =================================================
+   * GENERAL EFFECT 2
+   * =================================================
+   */
 
-      if (
-        Array.isArray(
-          scoreData?.judges
-        )
-        && scoreData.judges.length > 1
-      ) {
-        return 'DOUBLE';
-      }
+  const ge2Judge1First =
+    numbers[
+      DOUBLE_POSITIONS
+        .GE2
+        .judge1[0]
+    ];
 
-      if (
-        scoreData?.judge2
-      ) {
-        return 'DOUBLE';
-      }
-    }
+  const ge2Judge1Second =
+    numbers[
+      DOUBLE_POSITIONS
+        .GE2
+        .judge1[1]
+    ];
+
+  const ge2Judge2First =
+    numbers[
+      DOUBLE_POSITIONS
+        .GE2
+        .judge2[0]
+    ];
+
+  const ge2Judge2Second =
+    numbers[
+      DOUBLE_POSITIONS
+        .GE2
+        .judge2[1]
+    ];
+
+
+  if (
+    !validSubcaption(
+      ge2Judge1First
+    )
+    || !validSubcaption(
+      ge2Judge1Second
+    )
+    || !validSubcaption(
+      ge2Judge2First
+    )
+    || !validSubcaption(
+      ge2Judge2Second
+    )
+  ) {
+    return null;
   }
 
-  return 'STANDARD';
+
+  output.GE2 = {
+    judges: [
+      {
+        first:
+          ge2Judge1First,
+
+        second:
+          ge2Judge1Second
+      },
+
+      {
+        first:
+          ge2Judge2First,
+
+        second:
+          ge2Judge2Second
+      }
+    ]
+  };
+
+
+  /*
+   * =================================================
+   * VISUAL PROFICIENCY
+   * =================================================
+   */
+
+  const vpFirst =
+    numbers[
+      DOUBLE_POSITIONS
+        .VP
+        .judge1[0]
+    ];
+
+  const vpSecond =
+    numbers[
+      DOUBLE_POSITIONS
+        .VP
+        .judge1[1]
+    ];
+
+
+  if (
+    !validSubcaption(vpFirst)
+    || !validSubcaption(vpSecond)
+  ) {
+    return null;
+  }
+
+
+  output.VP = {
+    first:
+      vpFirst,
+
+    second:
+      vpSecond
+  };
+
+
+  /*
+   * =================================================
+   * VISUAL ANALYSIS
+   * =================================================
+   */
+
+  const vaFirst =
+    numbers[
+      DOUBLE_POSITIONS
+        .VA
+        .judge1[0]
+    ];
+
+  const vaSecond =
+    numbers[
+      DOUBLE_POSITIONS
+        .VA
+        .judge1[1]
+    ];
+
+
+  if (
+    !validSubcaption(vaFirst)
+    || !validSubcaption(vaSecond)
+  ) {
+    return null;
+  }
+
+
+  output.VA = {
+    first:
+      vaFirst,
+
+    second:
+      vaSecond
+  };
+
+
+  /*
+   * =================================================
+   * COLOR GUARD
+   * =================================================
+   */
+
+  const cgFirst =
+    numbers[
+      DOUBLE_POSITIONS
+        .CG
+        .judge1[0]
+    ];
+
+  const cgSecond =
+    numbers[
+      DOUBLE_POSITIONS
+        .CG
+        .judge1[1]
+    ];
+
+
+  if (
+    !validSubcaption(cgFirst)
+    || !validSubcaption(cgSecond)
+  ) {
+    return null;
+  }
+
+
+  output.CG = {
+    first:
+      cgFirst,
+
+    second:
+      cgSecond
+  };
+
+
+  /*
+   * =================================================
+   * BRASS
+   * =================================================
+   */
+
+  const brassFirst =
+    numbers[
+      DOUBLE_POSITIONS
+        .BRASS
+        .judge1[0]
+    ];
+
+  const brassSecond =
+    numbers[
+      DOUBLE_POSITIONS
+        .BRASS
+        .judge1[1]
+    ];
+
+
+  if (
+    !validSubcaption(
+      brassFirst
+    )
+    || !validSubcaption(
+      brassSecond
+    )
+  ) {
+    return null;
+  }
+
+
+  output.BRASS = {
+    first:
+      brassFirst,
+
+    second:
+      brassSecond
+  };
+
+
+  /*
+   * =================================================
+   * MUSIC ANALYSIS
+   * =================================================
+   */
+
+  const maJudge1First =
+    numbers[
+      DOUBLE_POSITIONS
+        .MA
+        .judge1[0]
+    ];
+
+  const maJudge1Second =
+    numbers[
+      DOUBLE_POSITIONS
+        .MA
+        .judge1[1]
+    ];
+
+  const maJudge2First =
+    numbers[
+      DOUBLE_POSITIONS
+        .MA
+        .judge2[0]
+    ];
+
+  const maJudge2Second =
+    numbers[
+      DOUBLE_POSITIONS
+        .MA
+        .judge2[1]
+    ];
+
+
+  if (
+    !validSubcaption(
+      maJudge1First
+    )
+    || !validSubcaption(
+      maJudge1Second
+    )
+    || !validSubcaption(
+      maJudge2First
+    )
+    || !validSubcaption(
+      maJudge2Second
+    )
+  ) {
+    return null;
+  }
+
+
+  output.MA = {
+    judges: [
+      {
+        first:
+          maJudge1First,
+
+        second:
+          maJudge1Second
+      },
+
+      {
+        first:
+          maJudge2First,
+
+        second:
+          maJudge2Second
+      }
+    ]
+  };
+
+
+  /*
+   * =================================================
+   * PERCUSSION
+   * =================================================
+   */
+
+  const percFirst =
+    numbers[
+      DOUBLE_POSITIONS
+        .PERC
+        .judge1[0]
+    ];
+
+  const percSecond =
+    numbers[
+      DOUBLE_POSITIONS
+        .PERC
+        .judge1[1]
+    ];
+
+
+  if (
+    !validSubcaption(
+      percFirst
+    )
+    || !validSubcaption(
+      percSecond
+    )
+  ) {
+    return null;
+  }
+
+
+  output.PERC = {
+    first:
+      percFirst,
+
+    second:
+      percSecond
+  };
+
+
+  return output;
 }
 
 
 /*
  * =====================================================
- * PARSE DCI RECAP HTML
+ * DATE PARSING
  * =====================================================
  */
 
-function parseRecapHtml(
-  html,
-  sourceUrl,
-  yearHint = config.dciSourceYear
+function dateToIso(
+  month,
+  day,
+  year
 ) {
-  const $ =
-    cheerio.load(html);
-
-  const headingCandidates =
-    $('h1')
-      .map(
-        (_, element) =>
-          $(element)
-            .text()
-            .trim()
-      )
-      .get()
-      .filter(Boolean);
-
-  const eventName =
-    headingCandidates.at(-1)
-    || 'Imported DCI Event';
-
-  const pageText =
-    $('body')
-      .text()
-      .replace(
-        /\s+/g,
-        ' '
-      );
-
-  const eventDate =
-    parseDateFromText(
-      pageText,
-      yearHint
+  const date =
+    new Date(
+      `${month} ${day}, ${year} 12:00:00 UTC`
     );
 
-  const rows = [];
+  return Number.isNaN(
+    date.valueOf()
+  )
+    ? null
+    : date
+        .toISOString()
+        .slice(0, 10);
+}
 
 
-  $('table tr').each(
-    (_, tr) => {
-      const cells =
-        $(tr)
-          .find(
-            'th, td'
+function parseDateFromText(
+  text,
+  yearHint
+) {
+  const source =
+    String(text);
+
+
+  /*
+   * Example:
+   *
+   * August 7, 2026
+   */
+  const namedPattern =
+    /\b(January|February|March|April|May|June|July|August|September|October|November|December)\s+(\d{1,2}),\s+(\d{4})\b/gi;
+
+
+  const namedMatches = [
+    ...source.matchAll(
+      namedPattern
+    )
+  ]
+    .map(
+      (match) => ({
+        year:
+          Number(
+            match[3]
+          ),
+
+        iso:
+          dateToIso(
+            match[1],
+            match[2],
+            match[3]
           )
-          .map(
-            (__, cell) =>
-              $(cell)
-                .text()
-                .replace(
-                  /\s+/g,
-                  ' '
-                )
-                .trim()
-          )
-          .get();
+      })
+    )
+    .filter(
+      (item) =>
+        item.iso
+    );
 
-      if (
-        cells.length < 2
-      ) {
-        return;
-      }
 
-      const corpsName =
-        cells[0];
+  const matchingNamed =
+    namedMatches.filter(
+      (item) =>
+        item.year
+        === Number(yearHint)
+    );
 
-      if (
-        !corpsName
-        || /corps|place/i.test(
-          corpsName
-        )
-      ) {
-        return;
-      }
 
-      const numbers =
-        parseNumbers(
-          cells
-            .slice(1)
-            .join(' ')
-        );
+  if (
+    matchingNamed.length
+  ) {
+    return matchingNamed.at(-1).iso;
+  }
 
-      /*
-       * Try double-panel parsing first if the upgraded
-       * parser exists.
-       */
-      let scores = null;
 
-      if (
-        extractDoubleRowScores
-      ) {
-        try {
-          scores =
-            extractDoubleRowScores(
-              numbers,
-              cells
-            );
-        } catch (_error) {
-          scores = null;
-        }
-      }
+  if (
+    namedMatches.length
+  ) {
+    return namedMatches.at(-1).iso;
+  }
 
-      /*
-       * Fall back to the existing standard parser.
-       */
-      if (!scores) {
-        scores =
-          extractStandardRowScores(
-            numbers
-          );
-      }
 
-      if (scores) {
-        rows.push({
-          corpsName,
-          scores
-        });
-      }
-    }
+  /*
+   * Example:
+   *
+   * 08/07/2026
+   */
+  const numericPattern =
+    /\b(\d{1,2})\/(\d{1,2})\/(\d{4})\b/g;
+
+
+  const numericMatches = [
+    ...source.matchAll(
+      numericPattern
+    )
+  ].map(
+    (match) => ({
+      year:
+        Number(
+          match[3]
+        ),
+
+      iso:
+        `${match[3]}-${match[1].padStart(
+          2,
+          '0'
+        )}-${match[2].padStart(
+          2,
+          '0'
+        )}`
+    })
   );
 
 
-  if (!rows.length) {
-    throw new Error(
-      'No DCI recap rows were recognized. Use manual score entry or update dciParsing.js for the current recap table structure.'
-    );
-  }
-
-
-  const panelType =
-    detectPanelType(
-      rows
+  const matchingNumeric =
+    numericMatches.filter(
+      (item) =>
+        item.year
+        === Number(yearHint)
     );
 
 
-  return {
-    name:
-      eventName,
-
-    slug:
-      slugify(
-        `${eventDate}-${eventName}`
-      ),
-
-    eventDate,
-
-    location:
-      null,
-
-    sourceUrl,
-
-    panelType,
-
-    rows
-  };
-}
-
-
-/*
- * =====================================================
- * SAVE RAW JUDGE SCORE
- * =====================================================
- */
-
-async function upsertJudgeScore(
-  client,
-  eventId,
-  corpsId,
-  captionCode,
-  judgeNumber,
-  first,
-  second
-) {
   if (
-    first == null
-    && second == null
+    matchingNumeric.length
   ) {
-    await client.query(`
-      DELETE FROM score_panels
-
-      WHERE event_id = $1
-        AND corps_id = $2
-        AND caption_code = $3
-        AND judge_number = $4
-    `, [
-      eventId,
-      corpsId,
-      captionCode,
-      judgeNumber
-    ]);
-
-    return;
+    return matchingNumeric.at(-1).iso;
   }
 
 
   if (
-    !validateScore(first)
-    || !validateScore(second)
+    numericMatches.length
   ) {
-    throw new Error(
-      `Invalid ${captionCode} judge score. Scores must be between 0.000 and 10.000.`
-    );
+    return numericMatches.at(-1).iso;
   }
 
 
-  await client.query(`
-    INSERT INTO score_panels (
-      event_id,
-      corps_id,
-      caption_code,
-      judge_number,
-      first_score,
-      second_score,
-      updated_at
-    )
-
-    VALUES (
-      $1,
-      $2,
-      $3,
-      $4,
-      $5,
-      $6,
-      NOW()
-    )
-
-    ON CONFLICT (
-      event_id,
-      corps_id,
-      caption_code,
-      judge_number
-    )
-
-    DO UPDATE SET
-      first_score =
-        EXCLUDED.first_score,
-
-      second_score =
-        EXCLUDED.second_score,
-
-      updated_at =
-        NOW()
-  `, [
-    eventId,
-    corpsId,
-    captionCode,
-    judgeNumber,
-    first,
-    second
-  ]);
-}
-
-
-/*
- * =====================================================
- * SAVE OFFICIAL AVERAGED SCORE
- * =====================================================
- */
-
-async function upsertOfficialScore(
-  client,
-  eventId,
-  corpsId,
-  captionCode,
-  first,
-  second
-) {
-  if (
-    first == null
-    && second == null
-  ) {
-    await client.query(`
-      DELETE FROM scores
-
-      WHERE event_id = $1
-        AND corps_id = $2
-        AND caption_code = $3
-    `, [
-      eventId,
-      corpsId,
-      captionCode
-    ]);
-
-    return;
-  }
-
-
-  if (
-    !validateScore(first)
-    || !validateScore(second)
-  ) {
-    throw new Error(
-      `Invalid official ${captionCode} score. Scores must be between 0.000 and 10.000.`
-    );
-  }
-
-
-  await client.query(`
-    INSERT INTO scores (
-      event_id,
-      corps_id,
-      caption_code,
-      first_score,
-      second_score,
-      updated_at
-    )
-
-    VALUES (
-      $1,
-      $2,
-      $3,
-      $4,
-      $5,
-      NOW()
-    )
-
-    ON CONFLICT (
-      event_id,
-      corps_id,
-      caption_code
-    )
-
-    DO UPDATE SET
-      first_score =
-        EXCLUDED.first_score,
-
-      second_score =
-        EXCLUDED.second_score,
-
-      updated_at =
-        NOW()
-  `, [
-    eventId,
-    corpsId,
-    captionCode,
-    first,
-    second
-  ]);
-}
-
-
-/*
- * =====================================================
- * INSERT / UPDATE IMPORTED EVENT
- * =====================================================
- */
-
-async function upsertImportedEvent(
-  parsed
-) {
-  return withTransaction(
-    async (client) => {
-      const panelType =
-        parsed.panelType === 'DOUBLE'
-          ? 'DOUBLE'
-          : 'STANDARD';
-
-
-      const eventResult =
-        await client.query(`
-          INSERT INTO events (
-            name,
-            slug,
-            event_date,
-            location,
-            source_url,
-            source_kind,
-            panel_type,
-            finalized
-          )
-
-          VALUES (
-            $1,
-            $2,
-            $3,
-            $4,
-            $5,
-            'DCI_AUTHORIZED_IMPORT',
-            $6,
-            TRUE
-          )
-
-          ON CONFLICT (slug)
-
-          DO UPDATE SET
-            name =
-              EXCLUDED.name,
-
-            event_date =
-              EXCLUDED.event_date,
-
-            location =
-              EXCLUDED.location,
-
-            source_url =
-              EXCLUDED.source_url,
-
-            source_kind =
-              EXCLUDED.source_kind,
-
-            panel_type =
-              EXCLUDED.panel_type,
-
-            updated_at =
-              NOW()
-
-          RETURNING id
-        `, [
-          parsed.name,
-          parsed.slug,
-          parsed.eventDate,
-          parsed.location,
-          parsed.sourceUrl,
-          panelType
-        ]);
-
-
-      const eventId =
-        eventResult.rows[0].id;
-
-
-      let scoreCount = 0;
-
-      let judgeScoreCount = 0;
-
-
-      for (
-        const row
-        of parsed.rows
-      ) {
-        const corpsSlug =
-          slugify(
-            row.corpsName
-          );
-
-
-        const corpsResult =
-          await client.query(`
-            INSERT INTO corps (
-              name,
-              slug,
-              active
-            )
-
-            VALUES (
-              $1,
-              $2,
-              TRUE
-            )
-
-            ON CONFLICT (slug)
-
-            DO UPDATE SET
-              name =
-                EXCLUDED.name
-
-            RETURNING id
-          `, [
-            row.corpsName,
-            corpsSlug
-          ]);
-
-
-        const corpsId =
-          corpsResult.rows[0].id;
-
-
-        for (
-          const [
-            captionCode,
-            rawScoreData
-          ]
-          of Object.entries(
-            row.scores
-          )
-        ) {
-          const normalized =
-            normalizeCaptionScore(
-              captionCode,
-              rawScoreData,
-              panelType
-            );
-
-
-          /*
-           * Remove existing raw judge scores for this
-           * caption before replacing the imported recap.
-           *
-           * This prevents stale Judge 2 data if a recap
-           * changes from DOUBLE to STANDARD.
-           */
-          await client.query(`
-            DELETE FROM score_panels
-
-            WHERE event_id = $1
-              AND corps_id = $2
-              AND caption_code = $3
-          `, [
-            eventId,
-            corpsId,
-            captionCode
-          ]);
-
-
-          /*
-           * Store every individual judge.
-           */
-          for (
-            let judgeIndex = 0;
-            judgeIndex <
-              normalized.judges.length;
-            judgeIndex += 1
-          ) {
-            /*
-             * Judge 2 is only valid on GE1, GE2,
-             * and MA when the event is DOUBLE.
-             */
-            if (
-              judgeIndex === 1
-              && (
-                panelType !== 'DOUBLE'
-                || !DOUBLE_JUDGE_CAPTIONS.has(
-                  captionCode
-                )
-              )
-            ) {
-              continue;
-            }
-
-
-            const judge =
-              normalized.judges[
-                judgeIndex
-              ];
-
-
-            await upsertJudgeScore(
-              client,
-              eventId,
-              corpsId,
-              captionCode,
-              judgeIndex + 1,
-              judge.first,
-              judge.second
-            );
-
-
-            if (
-              judge.first != null
-              || judge.second != null
-            ) {
-              judgeScoreCount += 1;
-            }
-          }
-
-
-          /*
-           * Store the official fantasy values.
-           *
-           * If two judges exist:
-           *
-           * first_score =
-           * average of BOTH first/content scores
-           *
-           * second_score =
-           * average of BOTH second/achievement scores
-           */
-          await upsertOfficialScore(
-            client,
-            eventId,
-            corpsId,
-            captionCode,
-            normalized.first,
-            normalized.second
-          );
-
-
-          if (
-            normalized.first != null
-            || normalized.second != null
-          ) {
-            scoreCount += 1;
-          }
-        }
-      }
-
-
-      return {
-        eventId,
-        scoreCount,
-        judgeScoreCount,
-        panelType
-      };
-    }
-  );
-}
-
-
-/*
- * =====================================================
- * IMPORT ONE DCI RECAP URL
- * =====================================================
- */
-
-async function importRecapUrl(
-  url
-) {
-  assertImportAllowed();
-
-
-  if (
-    !/^https:\/\/(?:www\.)?dci\.org\/scores\/recap\//i.test(
-      url
-    )
-  ) {
-    throw new Error(
-      'Only official dci.org recap URLs are accepted by this importer.'
-    );
-  }
-
-
-  const html =
-    await fetchHtml(
-      url
-    );
-
-
-  const parsed =
-    parseRecapHtml(
-      html,
-      url
-    );
-
-
-  const result =
-    await upsertImportedEvent(
-      parsed
-    );
-
-
-  await query(`
-    INSERT INTO sync_runs (
-      source,
-      status,
-      message
-    )
-
-    VALUES (
-      'DCI',
-      'SUCCESS',
-      $1
-    )
-  `, [
-    `Imported ${parsed.name}: ${result.scoreCount} official caption rows, ${result.judgeScoreCount} judge rows, ${result.panelType} panel`
-  ]);
-
-
-  return {
-    ...parsed,
-    ...result
-  };
-}
-
-
-/*
- * =====================================================
- * DISCOVER DCI RECAP URLS
- * =====================================================
- */
-
-async function discoverRecapUrls(
-  year =
-    config.dciSourceYear
-) {
-  assertImportAllowed();
-
-
-  const html =
-    await fetchHtml(
-      'https://www.dci.org/scores/'
-    );
-
-
-  const $ =
-    cheerio.load(
-      html
-    );
-
-
-  const urls =
-    new Set();
-
-
-  $(
-    `a[href*="/scores/recap/${year}-"]`
-  ).each(
-    (_, link) => {
-      const href =
-        $(link).attr(
-          'href'
-        );
-
-      if (!href) {
-        return;
-      }
-
-
-      urls.add(
-        new URL(
-          href,
-          'https://www.dci.org'
-        ).href
-      );
-    }
-  );
-
-
-  return [
-    ...urls
-  ];
-}
-
-
-/*
- * =====================================================
- * SYNC DISCOVERED RECAPS
- * =====================================================
- */
-
-async function syncDiscoveredRecaps() {
-  const urls =
-    await discoverRecapUrls();
-
-
-  const results = [];
-
-
-  for (
-    const url
-    of urls.slice(
-      0,
-      50
-    )
-  ) {
-    try {
-      results.push({
-        url,
-
-        ok:
-          true,
-
-        result:
-          await importRecapUrl(
-            url
-          )
-      });
-    } catch (error) {
-      results.push({
-        url,
-
-        ok:
-          false,
-
-        error:
-          error.message
-      });
-    }
-  }
-
-
-  return results;
+  return `${yearHint}-01-01`;
 }
 
 
@@ -1217,12 +933,14 @@ async function syncDiscoveredRecaps() {
  */
 
 module.exports = {
+  STANDARD_POSITIONS,
+  DOUBLE_POSITIONS,
+  DOUBLE_TOTAL_POSITIONS,
+
   parseNumbers,
+
   extractStandardRowScores,
-  parseRecapHtml,
-  upsertImportedEvent,
-  importRecapUrl,
-  discoverRecapUrls,
-  syncDiscoveredRecaps,
-  assertImportAllowed
+  extractDoubleRowScores,
+
+  parseDateFromText
 };
