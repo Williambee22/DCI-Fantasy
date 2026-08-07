@@ -1,10 +1,81 @@
 <%- include('../partials/header') %>
 
+<%
+  const doubleJudgeCaptions = new Set([
+    'GE1',
+    'GE2',
+    'MA'
+  ]);
+
+  const isDoublePanel =
+    event.panel_type === 'DOUBLE';
+
+  /*
+   * scoreMap contains the official/averaged scores:
+   *   corpsId:captionCode
+   *
+   * scorePanelMap contains individual judge scores:
+   *   corpsId:captionCode:judgeNumber
+   *
+   * The fallback to scoreMap for Judge 1 keeps older
+   * standard-panel events visible.
+   */
+  const panelScores =
+    typeof scorePanelMap !== 'undefined'
+      ? scorePanelMap
+      : {};
+
+  function getJudgeScore(
+    corpsId,
+    captionCode,
+    judgeNumber
+  ) {
+    const panelScore =
+      panelScores[
+        `${corpsId}:${captionCode}:${judgeNumber}`
+      ];
+
+    if (panelScore) {
+      return panelScore;
+    }
+
+    if (judgeNumber === 1) {
+      return (
+        scoreMap[
+          `${corpsId}:${captionCode}`
+        ] || null
+      );
+    }
+
+    return null;
+  }
+
+  function inputValue(
+    score,
+    field
+  ) {
+    if (
+      !score
+      || score[field] == null
+    ) {
+      return '';
+    }
+
+    return formatScore(
+      score[field]
+    );
+  }
+%>
+
 <div class="page-heading split-heading">
   <div>
-    <p class="eyebrow">Global scoring</p>
+    <p class="eyebrow">
+      Score administration
+    </p>
 
-    <h1><%= event.name %></h1>
+    <h1>
+      <%= event.name %>
+    </h1>
 
     <p class="muted">
       <%= event.event_date %> ·
@@ -12,19 +83,38 @@
     </p>
   </div>
 
-  <a
-    class="button secondary"
-    href="/admin"
-  >
-    Back to admin
-  </a>
+  <div class="heading-actions">
+    <a
+      class="button secondary"
+      href="/admin"
+    >
+      Back to admin
+    </a>
+  </div>
 </div>
 
-<section class="panel event-meta-panel">
+
+<!-- ======================================================
+     EVENT DETAILS
+====================================================== -->
+
+<section class="panel section-block">
+  <div class="section-title-row">
+    <div>
+      <p class="eyebrow">
+        Event settings
+      </p>
+
+      <h2>
+        Event details
+      </h2>
+    </div>
+  </div>
+
   <form
     method="post"
-    action="/admin/events/<%= event.id %>/meta"
-    class="meta-form"
+    action="/admin/events/<%= event.id %>/details"
+    class="stack-form"
   >
     <input
       type="hidden"
@@ -62,11 +152,67 @@
       >
     </label>
 
+
+    <!-- PANEL TYPE -->
+
+    <label>
+      Judging panel
+
+      <select
+        name="panel_type"
+        id="panel-type-select"
+        required
+      >
+        <option
+          value="STANDARD"
+          <%= !isDoublePanel
+            ? 'selected'
+            : '' %>
+        >
+          Standard Panel
+        </option>
+
+        <option
+          value="DOUBLE"
+          <%= isDoublePanel
+            ? 'selected'
+            : '' %>
+        >
+          Double Panel
+        </option>
+      </select>
+    </label>
+
+    <div class="panel-type-help">
+      <% if (isDoublePanel) { %>
+        <strong>
+          Double Panel
+        </strong>
+
+        <p class="muted">
+          GE1, GE2, and Music Analysis use two judges.
+          Content and Achievement are averaged separately
+          between the two judges.
+        </p>
+      <% } else { %>
+        <strong>
+          Standard Panel
+        </strong>
+
+        <p class="muted">
+          Each caption uses one judge.
+        </p>
+      <% } %>
+    </div>
+
+
     <label class="checkbox-label">
       <input
         type="checkbox"
         name="finalized"
-        <%= event.finalized ? 'checked' : '' %>
+        <%= event.finalized
+          ? 'checked'
+          : '' %>
       >
 
       Count scores in fantasy standings
@@ -81,24 +227,41 @@
   </form>
 </section>
 
-<section class="section-block panel recap-paste-panel">
+
+<!-- ======================================================
+     PASTE COMPLETE RECAP
+====================================================== -->
+
+<section class="panel section-block">
   <div class="section-title-row">
     <div>
-      <p class="eyebrow">Bulk score entry</p>
+      <p class="eyebrow">
+        Quick import
+      </p>
 
-      <h2>Paste complete recap</h2>
+      <h2>
+        Paste complete recap
+      </h2>
 
       <p class="muted">
         Paste the complete recap beginning with the first
         corps name. Placement numbers, caption totals,
         penalties, and final scores will be ignored.
       </p>
+
+      <% if (isDoublePanel) { %>
+        <p class="muted">
+          This event is marked as a Double Panel.
+          GE1, GE2, and Music Analysis may contain two
+          separate judge scores.
+        </p>
+      <% } %>
     </div>
   </div>
 
   <form
     method="post"
-    action="/admin/events/<%= event.id %>/paste-scores"
+    action="/admin/events/<%= event.id %>/import-recap"
     class="stack-form"
   >
     <input
@@ -127,9 +290,9 @@
     </label>
 
     <p class="muted">
-      Existing scores for corps included in the pasted recap
-      will be overwritten. Corps not included in the paste
-      will keep their current scores.
+      Existing scores for corps included in the pasted
+      recap will be overwritten. Corps not included in
+      the paste will keep their current scores.
     </p>
 
     <button
@@ -141,22 +304,46 @@
   </form>
 </section>
 
-<section class="section-block panel score-entry-panel">
+
+<!-- ======================================================
+     MANUAL SCORE ENTRY
+====================================================== -->
+
+<section class="panel section-block score-entry-panel">
   <div class="section-title-row">
     <div>
-      <p class="eyebrow">Caption grid</p>
+      <p class="eyebrow">
+        Manual scoring
+      </p>
 
-      <h2>Enter subcaption scores</h2>
+      <h2>
+        Enter subcaption scores
+      </h2>
 
       <p class="muted">
-        Use three-decimal scores. Blank pairs are removed.
+        Enter Content and Achievement scores to three
+        decimals.
       </p>
+
+      <% if (isDoublePanel) { %>
+        <p class="muted">
+          GE1, GE2, and Music Analysis have Judge 1
+          and Judge 2 fields. The official fantasy
+          Content and Achievement scores are the
+          averages of those judges.
+        </p>
+      <% } else { %>
+        <p class="muted">
+          This event uses one judge per caption.
+        </p>
+      <% } %>
     </div>
   </div>
 
   <form
     method="post"
     action="/admin/events/<%= event.id %>/scores"
+    id="score-entry-form"
   >
     <input
       type="hidden"
@@ -165,25 +352,111 @@
     >
 
     <div class="score-grid-wrap">
-      <table class="score-grid">
+      <table
+        class="score-grid dci-admin-score-grid"
+        id="admin-score-grid"
+      >
         <thead>
-          <tr>
+
+          <!-- ==========================================
+               CAPTION NAMES
+          =========================================== -->
+
+          <tr class="score-caption-row">
             <th
               class="sticky-col"
-              rowspan="2"
+              rowspan="3"
             >
               Corps
             </th>
 
-            <% captions.forEach((caption) => { %>
-              <th colspan="2">
+            <% captions.forEach((caption) => {
+              const doubled =
+                isDoublePanel
+                && doubleJudgeCaptions.has(
+                  caption.code
+                );
+
+              const colspan =
+                doubled
+                  ? 6
+                  : 2;
+            %>
+
+              <th
+                colspan="<%= colspan %>"
+                class="
+                  caption-group
+                  caption-<%= caption.code.toLowerCase() %>
+                "
+              >
                 <%= caption.name %>
               </th>
+
             <% }) %>
           </tr>
 
-          <tr>
-            <% captions.forEach((caption) => { %>
+
+          <!-- ==========================================
+               JUDGE LABELS
+          =========================================== -->
+
+          <tr class="score-judge-row">
+
+            <% captions.forEach((caption) => {
+              const doubled =
+                isDoublePanel
+                && doubleJudgeCaptions.has(
+                  caption.code
+                );
+            %>
+
+              <% if (doubled) { %>
+
+                <th colspan="2">
+                  Judge 1
+                </th>
+
+                <th colspan="2">
+                  Judge 2
+                </th>
+
+                <th
+                  colspan="2"
+                  class="average-heading"
+                >
+                  Average
+                </th>
+
+              <% } else { %>
+
+                <th colspan="2">
+                  Judge
+                </th>
+
+              <% } %>
+
+            <% }) %>
+
+          </tr>
+
+
+          <!-- ==========================================
+               SUBCAPTION LABELS
+          =========================================== -->
+
+          <tr class="score-subcaption-row">
+
+            <% captions.forEach((caption) => {
+              const doubled =
+                isDoublePanel
+                && doubleJudgeCaptions.has(
+                  caption.code
+                );
+            %>
+
+              <!-- JUDGE 1 -->
+
               <th>
                 <%= caption.first_label %>
               </th>
@@ -191,54 +464,224 @@
               <th>
                 <%= caption.second_label %>
               </th>
+
+
+              <% if (doubled) { %>
+
+                <!-- JUDGE 2 -->
+
+                <th>
+                  <%= caption.first_label %>
+                </th>
+
+                <th>
+                  <%= caption.second_label %>
+                </th>
+
+
+                <!-- OFFICIAL AVERAGE -->
+
+                <th class="average-heading">
+                  Avg
+                  <%= caption.first_label %>
+                </th>
+
+                <th class="average-heading">
+                  Avg
+                  <%= caption.second_label %>
+                </th>
+
+              <% } %>
+
             <% }) %>
+
           </tr>
         </thead>
 
+
+        <!-- ============================================
+             CORPS SCORE ROWS
+        ============================================= -->
+
         <tbody>
+
           <% corps.forEach((item) => { %>
-            <tr>
+
+            <tr data-corps-id="<%= item.id %>">
+
               <th class="sticky-col">
                 <%= item.name %>
               </th>
 
+
               <% captions.forEach((caption) => {
-                const score =
-                  scoreMap[`${item.id}:${caption.code}`];
+                const doubled =
+                  isDoublePanel
+                  && doubleJudgeCaptions.has(
+                    caption.code
+                  );
+
+                const judge1 =
+                  getJudgeScore(
+                    item.id,
+                    caption.code,
+                    1
+                  );
+
+                const judge2 =
+                  getJudgeScore(
+                    item.id,
+                    caption.code,
+                    2
+                  );
+
+                const officialScore =
+                  scoreMap[
+                    `${item.id}:${caption.code}`
+                  ];
               %>
+
+
+                <!-- =====================================
+                     JUDGE 1
+                ====================================== -->
+
                 <td>
                   <input
-                    aria-label="<%= item.name %> <%= caption.name %> <%= caption.first_label %>"
+                    class="score-input judge-score-input"
+                    aria-label="<%= item.name %> <%= caption.name %> Judge 1 <%= caption.first_label %>"
                     type="number"
                     min="0"
                     max="10"
                     step="0.001"
-                    name="scores[<%= item.id %>][<%= caption.code %>][first]"
-                    value="<%= score && score.first_score != null
-                      ? formatScore(score.first_score)
-                      : '' %>"
+                    name="panel_scores[<%= item.id %>][<%= caption.code %>][1][first]"
+                    value="<%= inputValue(
+                      judge1,
+                      'first_score'
+                    ) %>"
+                    data-corps="<%= item.id %>"
+                    data-caption="<%= caption.code %>"
+                    data-judge="1"
+                    data-component="first"
                   >
                 </td>
 
                 <td>
                   <input
-                    aria-label="<%= item.name %> <%= caption.name %> <%= caption.second_label %>"
+                    class="score-input judge-score-input"
+                    aria-label="<%= item.name %> <%= caption.name %> Judge 1 <%= caption.second_label %>"
                     type="number"
                     min="0"
                     max="10"
                     step="0.001"
-                    name="scores[<%= item.id %>][<%= caption.code %>][second]"
-                    value="<%= score && score.second_score != null
-                      ? formatScore(score.second_score)
-                      : '' %>"
+                    name="panel_scores[<%= item.id %>][<%= caption.code %>][1][second]"
+                    value="<%= inputValue(
+                      judge1,
+                      'second_score'
+                    ) %>"
+                    data-corps="<%= item.id %>"
+                    data-caption="<%= caption.code %>"
+                    data-judge="1"
+                    data-component="second"
                   >
                 </td>
+
+
+                <% if (doubled) { %>
+
+                  <!-- ===================================
+                       JUDGE 2
+                  ==================================== -->
+
+                  <td>
+                    <input
+                      class="score-input judge-score-input"
+                      aria-label="<%= item.name %> <%= caption.name %> Judge 2 <%= caption.first_label %>"
+                      type="number"
+                      min="0"
+                      max="10"
+                      step="0.001"
+                      name="panel_scores[<%= item.id %>][<%= caption.code %>][2][first]"
+                      value="<%= inputValue(
+                        judge2,
+                        'first_score'
+                      ) %>"
+                      data-corps="<%= item.id %>"
+                      data-caption="<%= caption.code %>"
+                      data-judge="2"
+                      data-component="first"
+                    >
+                  </td>
+
+                  <td>
+                    <input
+                      class="score-input judge-score-input"
+                      aria-label="<%= item.name %> <%= caption.name %> Judge 2 <%= caption.second_label %>"
+                      type="number"
+                      min="0"
+                      max="10"
+                      step="0.001"
+                      name="panel_scores[<%= item.id %>][<%= caption.code %>][2][second]"
+                      value="<%= inputValue(
+                        judge2,
+                        'second_score'
+                      ) %>"
+                      data-corps="<%= item.id %>"
+                      data-caption="<%= caption.code %>"
+                      data-judge="2"
+                      data-component="second"
+                    >
+                  </td>
+
+
+                  <!-- ===================================
+                       AVERAGED OFFICIAL SCORES
+                  ==================================== -->
+
+                  <td class="average-score-cell">
+                    <strong
+                      class="average-score"
+                      data-average-corps="<%= item.id %>"
+                      data-average-caption="<%= caption.code %>"
+                      data-average-component="first"
+                    >
+                      <%= officialScore
+                        && officialScore.first_score != null
+                          ? formatScore(
+                              officialScore.first_score
+                            )
+                          : '—' %>
+                    </strong>
+                  </td>
+
+                  <td class="average-score-cell">
+                    <strong
+                      class="average-score"
+                      data-average-corps="<%= item.id %>"
+                      data-average-caption="<%= caption.code %>"
+                      data-average-component="second"
+                    >
+                      <%= officialScore
+                        && officialScore.second_score != null
+                          ? formatScore(
+                              officialScore.second_score
+                            )
+                          : '—' %>
+                    </strong>
+                  </td>
+
+                <% } %>
+
               <% }) %>
+
             </tr>
+
           <% }) %>
+
         </tbody>
       </table>
     </div>
+
 
     <div class="sticky-save">
       <button
@@ -255,7 +698,81 @@
   </form>
 </section>
 
-<section class="danger-panel">
+
+<!-- ======================================================
+     DOUBLE PANEL EXPLANATION
+====================================================== -->
+
+<% if (isDoublePanel) { %>
+  <section class="panel section-block">
+    <p class="eyebrow">
+      Double panel calculation
+    </p>
+
+    <h2>
+      How duplicate judges are scored
+    </h2>
+
+    <div class="scoring-formula">
+      <span>
+        <strong>
+          GE1 Content
+        </strong>
+
+        (Judge 1 Content + Judge 2 Content) ÷ 2
+      </span>
+
+      <span>
+        <strong>
+          GE1 Achievement
+        </strong>
+
+        (Judge 1 Achievement + Judge 2 Achievement) ÷ 2
+      </span>
+
+      <span>
+        <strong>
+          GE2
+        </strong>
+
+        Content and Achievement are averaged separately
+      </span>
+
+      <span>
+        <strong>
+          Music Analysis
+        </strong>
+
+        Content and Achievement are averaged separately
+      </span>
+    </div>
+
+    <p class="muted">
+      The averaged subcaption scores are what fantasy
+      managers receive for their drafted assets.
+    </p>
+  </section>
+<% } %>
+
+
+<!-- ======================================================
+     DELETE EVENT
+====================================================== -->
+
+<section class="panel section-block danger-zone">
+  <p class="eyebrow">
+    Danger zone
+  </p>
+
+  <h2>
+    Delete event
+  </h2>
+
+  <p class="muted">
+    This permanently removes the event and every score
+    associated with it.
+  </p>
+
   <form
     method="post"
     action="/admin/events/<%= event.id %>/delete"
@@ -275,5 +792,186 @@
     </button>
   </form>
 </section>
+
+
+<!-- ======================================================
+     LIVE DOUBLE-PANEL AVERAGE PREVIEW
+====================================================== -->
+
+<script>
+(() => {
+  const form =
+    document.getElementById('score-entry-form');
+
+  if (!form) {
+    return;
+  }
+
+  function parseScore(input) {
+    if (!input) {
+      return null;
+    }
+
+    const raw = input.value.trim();
+
+    if (raw === '') {
+      return null;
+    }
+
+    const value = Number(raw);
+
+    return Number.isFinite(value)
+      ? value
+      : null;
+  }
+
+  function average(
+    first,
+    second
+  ) {
+    /*
+     * If both judges exist, average them.
+     */
+    if (
+      first != null
+      && second != null
+    ) {
+      return (
+        first + second
+      ) / 2;
+    }
+
+    /*
+     * If only one judge has been entered,
+     * show that value temporarily.
+     *
+     * The server-side save logic should perform
+     * the same rule.
+     */
+    if (first != null) {
+      return first;
+    }
+
+    if (second != null) {
+      return second;
+    }
+
+    return null;
+  }
+
+  function findInput(
+    corpsId,
+    captionCode,
+    judge,
+    component
+  ) {
+    return form.querySelector(
+      [
+        '[data-corps="' +
+          CSS.escape(corpsId) +
+          '"]',
+        '[data-caption="' +
+          CSS.escape(captionCode) +
+          '"]',
+        '[data-judge="' +
+          judge +
+          '"]',
+        '[data-component="' +
+          component +
+          '"]'
+      ].join('')
+    );
+  }
+
+  function updateAverage(
+    corpsId,
+    captionCode,
+    component
+  ) {
+    const output =
+      form.querySelector(
+        [
+          '[data-average-corps="' +
+            CSS.escape(corpsId) +
+            '"]',
+          '[data-average-caption="' +
+            CSS.escape(captionCode) +
+            '"]',
+          '[data-average-component="' +
+            component +
+            '"]'
+        ].join('')
+      );
+
+    if (!output) {
+      return;
+    }
+
+    const judge1 =
+      parseScore(
+        findInput(
+          corpsId,
+          captionCode,
+          1,
+          component
+        )
+      );
+
+    const judge2 =
+      parseScore(
+        findInput(
+          corpsId,
+          captionCode,
+          2,
+          component
+        )
+      );
+
+    const result =
+      average(
+        judge1,
+        judge2
+      );
+
+    output.textContent =
+      result == null
+        ? '—'
+        : result.toFixed(3);
+  }
+
+  function updateCaption(
+    corpsId,
+    captionCode
+  ) {
+    updateAverage(
+      corpsId,
+      captionCode,
+      'first'
+    );
+
+    updateAverage(
+      corpsId,
+      captionCode,
+      'second'
+    );
+  }
+
+  form
+    .querySelectorAll(
+      '.judge-score-input'
+    )
+    .forEach((input) => {
+      input.addEventListener(
+        'input',
+        () => {
+          updateCaption(
+            input.dataset.corps,
+            input.dataset.caption
+          );
+        }
+      );
+    });
+})();
+</script>
 
 <%- include('../partials/footer') %>
